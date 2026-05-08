@@ -5,7 +5,7 @@ from tau2.agent.base.streaming import (
     ParticipantTick,
     linearize_ticks,
 )
-from tau2.config import DEFAULT_LLM_NL_ASSERTIONS, DEFAULT_LLM_NL_ASSERTIONS_ARGS
+from tau2.config import DEFAULT_LLM_NL_ASSERTIONS, DEFAULT_LLM_NL_ASSERTIONS_ARGS, DEFAULT_LLM_NL_ASSERTIONS_BASE_URL
 from tau2.data_model.message import Message, SystemMessage, Tick, UserMessage
 from tau2.data_model.simulation import NLAssertionCheck, RewardInfo
 from tau2.data_model.tasks import RewardType, Task
@@ -118,11 +118,15 @@ class NLAssertionsEvaluator(EvaluatorBase[Message]):
             UserMessage(role="user", content=user_prompt),
         ]
 
+        extra_kwargs = {}
+        if DEFAULT_LLM_NL_ASSERTIONS_BASE_URL:
+            extra_kwargs["api_base"] = DEFAULT_LLM_NL_ASSERTIONS_BASE_URL
         assistant_message = generate(
             model=DEFAULT_LLM_NL_ASSERTIONS,
             messages=messages,
             call_name="nl_assertions_eval",
             **DEFAULT_LLM_NL_ASSERTIONS_ARGS,
+            **extra_kwargs,
         )
         result_data = json.loads(assistant_message.content)
         return [
