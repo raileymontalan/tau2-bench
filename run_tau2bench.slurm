@@ -57,6 +57,16 @@
 #   Cap tasks per domain. Omit (leave empty) to run the full domain.
 #   Default: (empty — run all tasks)
 #
+# MAX_CONCURRENCY
+#   Concurrent simulations. vLLM batches internally so raising this doesn't
+#   overwhelm the GPU — it just keeps the queue fuller.
+#   Default: 4
+#
+# TASK_TIMEOUT
+#   Max wallclock seconds per individual simulation before it's abandoned.
+#   Prevents stuck tasks (e.g. Qwen3 thinking loops) from blocking workers.
+#   Default: 300
+#
 # OUTPUT
 #   Name for the output directory under data/simulations/.
 #   Default: <model basename>
@@ -100,6 +110,7 @@ free_port() { python3 -c "import socket; s=socket.socket(); s.bind(('',0)); p=s.
 MODEL=${MODEL:-"Qwen/Qwen3-32B"}
 MODEL_TP=${MODEL_TP:-"1"}
 MODEL_PORT=${MODEL_PORT:-$(free_port)}
+ENABLE_THINKING=${ENABLE_THINKING:-"true"}
 
 JUDGE_MODEL=${JUDGE_MODEL:-"openai/gpt-oss-120b"}
 JUDGE_TP=${JUDGE_TP:-"1"}
@@ -108,6 +119,8 @@ JUDGE_PORT=${JUDGE_PORT:-$(free_port)}
 DOMAIN=${DOMAIN:-"all"}
 NUM_TRIALS=${NUM_TRIALS:-"1"}
 NUM_TASKS=${NUM_TASKS:-""}
+MAX_CONCURRENCY=${MAX_CONCURRENCY:-"4"}
+TASK_TIMEOUT=${TASK_TIMEOUT:-"300"}
 OUTPUT=${OUTPUT:-"$(echo ${MODEL} | awk -F/ '{print $NF}')"}
 
 # Resolve DOMAIN=all to core text domains
@@ -150,6 +163,11 @@ GPU0=${VISIBLE_DEVICES[0]:-0}
 GPU1=${VISIBLE_DEVICES[1]:-1}
 GPU2=${VISIBLE_DEVICES[2]:-2}
 
+THINKING_FLAG=""
+if [[ "$(echo "$ENABLE_THINKING" | tr '[:upper:]' '[:lower:]')" == "false" ]]; then
+    THINKING_FLAG="--chat-template-kwargs {\"enable_thinking\": false}"
+fi
+
 # Start agent model vLLM server
 echo "Starting agent vLLM server: ${MODEL} on port ${MODEL_PORT} (TP=${MODEL_TP})..."
 CUDA_VISIBLE_DEVICES=${GPU0} .venv/bin/vllm serve "${MODEL}" \
@@ -161,7 +179,8 @@ CUDA_VISIBLE_DEVICES=${GPU0} .venv/bin/vllm serve "${MODEL}" \
     --tool-call-parser hermes \
     --attention-backend FLASH_ATTN \
     --max-model-len 32768 \
-    --gpu-memory-utilization 0.85 &
+    --gpu-memory-utilization 0.85 \
+    ${THINKING_FLAG} &
 MODEL_PID=$!
 
 # Wait for agent model vLLM to be ready
@@ -214,13 +233,15 @@ for CURRENT_DOMAIN in "${DOMAINS_TO_RUN[@]}"; do
 
     tau2_args=(
         "uv" "run" "tau2" "run"
-        "--domain"     "${CURRENT_DOMAIN}"
-        "--agent-llm"  "openai/${MODEL}"
-        "--user-llm"   "openai/${MODEL}"
-        "--num-trials" "${NUM_TRIALS}"
-        "--save-to"    "${OUTPUT}_${CURRENT_DOMAIN}"
+        "--domain"          "${CURRENT_DOMAIN}"
+        "--agent-llm"       "openai/${MODEL}"
+        "--user-llm"        "openai/${MODEL}"
+        "--num-trials"      "${NUM_TRIALS}"
+        "--save-to"         "${OUTPUT}_${CURRENT_DOMAIN}"
+        "--max-concurrency" "${MAX_CONCURRENCY}"
+        "--timeout"         "${TASK_TIMEOUT}"
         "--auto-resume"
-        "--log-level"  "INFO"
+        "--log-level"       "INFO"
     )
 
     if [ ! -z "${NUM_TASKS}" ]; then
@@ -244,5 +265,17 @@ if [ -n "${JUDGE_PID}" ]; then
     echo "Shutting down judge vLLM server (PID ${JUDGE_PID})..."
     kill "${JUDGE_PID}"
 fi
+
+# Print and save results summary for each domain
+echo ""
+echo "=== Results Summary ==="
+for CURRENT_DOMAIN in "${DOMAINS_TO_RUN[@]}"; do
+    echo ""
+    echo "--- Domain: ${CURRENT_DOMAIN} ---"
+    SUMMARY_FILE="data/simulations/${OUTPUT}_${CURRENT_DOMAIN}/summary.txt"
+    uv run tau2 view --dir "data/simulations/${OUTPUT}_${CURRENT_DOMAIN}" 2>/dev/null \
+        | tee "${SUMMARY_FILE}" || true
+    echo "Summary saved to ${SUMMARY_FILE}"
+done
 
 exit $FINAL_EXIT

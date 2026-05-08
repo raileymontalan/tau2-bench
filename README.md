@@ -96,6 +96,8 @@ MODEL=aisingapore/Other-Model TENSOR_PARALLEL_SIZE=4 sbatch --gres=gpu:4 run_tau
 | `DOMAIN`               | `all`                     | `airline` (50), `retail` (114), `telecom` (114), `mock` (10), `all` |
 | `NUM_TRIALS`           | `1`                       | Trials per task for pass@k                                          |
 | `NUM_TASKS`            | *(all)*                   | Cap tasks per domain                                                |
+| `MAX_CONCURRENCY`      | `4`                      | Concurrent simulations (vLLM batches internally)                    |
+| `TASK_TIMEOUT`         | `300`                     | Max wallclock seconds per task before it's abandoned                |
 | `OUTPUT`               | `<model basename>`        | Output name under `data/simulations/`                               |
 
 ## Reference
