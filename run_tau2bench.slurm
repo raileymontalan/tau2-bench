@@ -15,6 +15,30 @@
 #   HuggingFace model ID to evaluate.
 #   Default: aisingapore/Gemma-SEA-LION-v4-27B-IT
 #
+# MODEL_TP
+#   Tensor parallel size for the agent model (number of GPUs).
+#   Qwen3-32B in BF16 is ~64GB — fits on 1x 80GB GPU.
+#   Default: 1
+#
+# MODEL_PORT
+#   Port for local vLLM server.
+#   Default: 8004
+#
+# JUDGE_MODEL
+#   HuggingFace model ID for NL assertions judge. Served on a separate vLLM
+#   instance (1 GPU). Set to empty string to disable and use default routing.
+#   Default: openai/gpt-oss-120b
+#
+# JUDGE_TP
+#   Tensor parallel size for the judge model.
+#   gpt-oss-120b is sparse MoE — fits on 1x 140GB GPU. TP=2 triggers allreduce_rms
+#   custom CUDA kernel that segfaults on CUDA 12.4 driver. Use TP=1.
+#   Default: 1
+#
+# JUDGE_PORT
+#   Port for judge vLLM server.
+#   Default: 8005
+#
 # DOMAIN
 #   Domain(s) to evaluate. One of:
 #     airline          — 50 tasks  (base split)
@@ -33,14 +57,6 @@
 #   Cap tasks per domain. Omit (leave empty) to run the full domain.
 #   Default: (empty — run all tasks)
 #
-# TENSOR_PARALLEL_SIZE
-#   Number of GPUs for vLLM tensor parallelism. Must match --gres=gpu:N.
-#   Default: 1
-#
-# VLLM_PORT
-#   Port for local vLLM server.
-#   Default: 8000
-#
 # OUTPUT
 #   Name for the output directory under data/simulations/.
 #   Default: <model basename>
@@ -51,8 +67,8 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=128G
-#SBATCH --gres=gpu:1
+#SBATCH --mem=256G
+#SBATCH --gres=gpu:2
 #SBATCH --time=24:00:00
 #SBATCH --nodelist=smc-pod-[3,5,8]
 #SBATCH --output=logs/tau2bench-%j.out
@@ -60,14 +76,38 @@
 
 cd $SLURM_SUBMIT_DIR
 
+source .venv/bin/activate
 export PATH="$HOME/.local/bin:$PATH"
 
-MODEL=${MODEL:-"aisingapore/Gemma-SEA-LION-v4-27B-IT"}
+SITE_PACKAGES=$(.venv/bin/python -c 'import site; print(site.getsitepackages()[0])')
+export LD_LIBRARY_PATH="${SITE_PACKAGES}/nvidia/cudnn/lib:${SITE_PACKAGES}/nvidia/cusparselt/lib:${SITE_PACKAGES}/nvidia/nccl/lib:${SITE_PACKAGES}/nvidia/nvshmem/lib:${LD_LIBRARY_PATH:-}"
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+
+# Validate flashinfer_cubin version attribute — broken install causes vLLM crash at import
+# flashinfer_cubin has no prebuilt wheels for cu128/torch2.10 — remove it so
+# flashinfer falls back to JIT mode (compiles kernels at runtime instead).
+if python3 -c "import flashinfer_cubin" 2>/dev/null; then
+    CUBIN_DIR=$(.venv/bin/python -c "import site; print(site.getsitepackages()[0])")/flashinfer_cubin
+    echo "Removing flashinfer_cubin to force JIT mode..."
+    rm -rf "${CUBIN_DIR}" "${CUBIN_DIR}"-*.dist-info 2>/dev/null || true
+fi
+
+mkdir -p logs
+
+
+free_port() { python3 -c "import socket; s=socket.socket(); s.bind(('',0)); p=s.getsockname()[1]; s.close(); print(p)"; }
+
+MODEL=${MODEL:-"Qwen/Qwen3-32B"}
+MODEL_TP=${MODEL_TP:-"1"}
+MODEL_PORT=${MODEL_PORT:-$(free_port)}
+
+JUDGE_MODEL=${JUDGE_MODEL:-"openai/gpt-oss-120b"}
+JUDGE_TP=${JUDGE_TP:-"1"}
+JUDGE_PORT=${JUDGE_PORT:-$(free_port)}
+
 DOMAIN=${DOMAIN:-"all"}
 NUM_TRIALS=${NUM_TRIALS:-"1"}
 NUM_TASKS=${NUM_TASKS:-""}
-TENSOR_PARALLEL_SIZE=${TENSOR_PARALLEL_SIZE:-"1"}
-VLLM_PORT=${VLLM_PORT:-"8000"}
 OUTPUT=${OUTPUT:-"$(echo ${MODEL} | awk -F/ '{print $NF}')"}
 
 # Resolve DOMAIN=all to core text domains
@@ -101,28 +141,73 @@ if [ ! -z "$UUIDS" ]; then
     export CUDA_VISIBLE_DEVICES=$VISIBLE_DEVICES_STR
 fi
 
-# Start vLLM server in background
-echo "Starting vLLM server for ${MODEL} on port ${VLLM_PORT}..."
-source .venv-vllm/bin/activate
-vllm serve "${MODEL}" \
-    --port "${VLLM_PORT}" \
-    --tensor-parallel-size "${TENSOR_PARALLEL_SIZE}" \
-    --dtype bfloat16 \
-    --enable-prefix-caching &
-VLLM_PID=$!
-deactivate
+# If VISIBLE_DEVICES wasn't populated (no UUID mapping), split CUDA_VISIBLE_DEVICES directly
+if [ ${#VISIBLE_DEVICES[@]} -eq 0 ] && [ -n "$CUDA_VISIBLE_DEVICES" ]; then
+    IFS=',' read -ra VISIBLE_DEVICES <<< "$CUDA_VISIBLE_DEVICES"
+fi
 
-# Wait for vLLM to be ready
-echo "Waiting for vLLM server to be ready..."
-until curl -sf "http://localhost:${VLLM_PORT}/health" > /dev/null 2>&1; do
+GPU0=${VISIBLE_DEVICES[0]:-0}
+GPU1=${VISIBLE_DEVICES[1]:-1}
+GPU2=${VISIBLE_DEVICES[2]:-2}
+
+# Start agent model vLLM server
+echo "Starting agent vLLM server: ${MODEL} on port ${MODEL_PORT} (TP=${MODEL_TP})..."
+CUDA_VISIBLE_DEVICES=${GPU0} .venv/bin/vllm serve "${MODEL}" \
+    --port "${MODEL_PORT}" \
+    --tensor-parallel-size "${MODEL_TP}" \
+    --dtype bfloat16 \
+    --enable-prefix-caching \
+    --enable-auto-tool-choice \
+    --tool-call-parser hermes \
+    --attention-backend FLASH_ATTN \
+    --max-model-len 32768 \
+    --gpu-memory-utilization 0.85 &
+MODEL_PID=$!
+
+# Wait for agent model vLLM to be ready
+echo "Waiting for model vLLM server to be ready..."
+until curl -sf "http://localhost:${MODEL_PORT}/health" > /dev/null 2>&1 && kill -0 "${MODEL_PID}" 2>/dev/null; do
+    if ! kill -0 "${MODEL_PID}" 2>/dev/null; then
+        echo "ERROR: vLLM server (PID ${MODEL_PID}) died before becoming ready. Exiting."
+        exit 1
+    fi
     sleep 5
 done
-echo "vLLM server ready."
+echo "Model vLLM server ready."
 
-export OPENAI_API_BASE="http://localhost:${VLLM_PORT}/v1"
+# Start NL assertions judge model vLLM server
+JUDGE_PID=""
+if [ -n "${JUDGE_MODEL}" ]; then
+    echo "Starting judge vLLM server: ${JUDGE_MODEL} on port ${JUDGE_PORT} (TP=${JUDGE_TP})..."
+    CUDA_VISIBLE_DEVICES=${GPU1} .venv/bin/vllm serve "${JUDGE_MODEL}" \
+        --port "${JUDGE_PORT}" \
+        --tensor-parallel-size "${JUDGE_TP}" \
+        --dtype bfloat16 \
+        --enable-prefix-caching \
+        --max-model-len 32768 \
+        --served-model-name "$(echo ${JUDGE_MODEL} | sed 's|openai/||')" &
+    JUDGE_PID=$!
+
+    # Wait for judge model vLLM to be ready
+    echo "Waiting for judge model vLLM server to be ready..."
+    until curl -sf "http://localhost:${JUDGE_PORT}/health" > /dev/null 2>&1 && kill -0 "${JUDGE_PID}" 2>/dev/null; do
+        if ! kill -0 "${JUDGE_PID}" 2>/dev/null; then
+            echo "ERROR: vLLM server (PID ${JUDGE_PID}) died before becoming ready. Exiting."
+            exit 1
+        fi
+        sleep 5
+    done
+    echo "Judge model vLLM server ready."
+
+    # Tell tau2-bench to use the local judge (openai/ prefix = LiteLLM OpenAI-compatible)
+    export TAU2_NL_JUDGE_MODEL="${JUDGE_MODEL}"
+    export TAU2_NL_JUDGE_BASE_URL="http://localhost:${JUDGE_PORT}/v1"
+fi
+
+export OPENAI_API_BASE="http://localhost:${MODEL_PORT}/v1"
 export OPENAI_API_KEY="dummy"
 
-# Run evaluation for each domain
+# Run tau2-bench for each domain
 FINAL_EXIT=0
 for CURRENT_DOMAIN in "${DOMAINS_TO_RUN[@]}"; do
     echo "=== Evaluating domain: ${CURRENT_DOMAIN} ==="
@@ -135,6 +220,7 @@ for CURRENT_DOMAIN in "${DOMAINS_TO_RUN[@]}"; do
         "--num-trials" "${NUM_TRIALS}"
         "--save-to"    "${OUTPUT}_${CURRENT_DOMAIN}"
         "--auto-resume"
+        "--log-level"  "INFO"
     )
 
     if [ ! -z "${NUM_TASKS}" ]; then
@@ -151,8 +237,12 @@ for CURRENT_DOMAIN in "${DOMAINS_TO_RUN[@]}"; do
     fi
 done
 
-# Shut down vLLM server
-echo "Shutting down vLLM server (PID ${VLLM_PID})..."
-kill "${VLLM_PID}"
+# Shut down vLLM servers
+echo "Shutting down model vLLM server (PID ${MODEL_PID})..."
+kill "${MODEL_PID}"
+if [ -n "${JUDGE_PID}" ]; then
+    echo "Shutting down judge vLLM server (PID ${JUDGE_PID})..."
+    kill "${JUDGE_PID}"
+fi
 
 exit $FINAL_EXIT
