@@ -86,6 +86,9 @@
 
 cd $SLURM_SUBMIT_DIR
 
+module use "${MODULEFILES_PATH}"
+module swap cuda/13.0.3
+
 source .venv/bin/activate
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -93,34 +96,76 @@ SITE_PACKAGES=$(.venv/bin/python -c 'import site; print(site.getsitepackages()[0
 export LD_LIBRARY_PATH="${SITE_PACKAGES}/nvidia/cudnn/lib:${SITE_PACKAGES}/nvidia/cusparselt/lib:${SITE_PACKAGES}/nvidia/nccl/lib:${SITE_PACKAGES}/nvidia/nvshmem/lib:${LD_LIBRARY_PATH:-}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
-# Validate flashinfer_cubin version attribute — broken install causes vLLM crash at import
-# flashinfer_cubin has no prebuilt wheels for cu128/torch2.10 — remove it so
-# flashinfer falls back to JIT mode (compiles kernels at runtime instead).
-if python3 -c "import flashinfer_cubin" 2>/dev/null; then
-    CUBIN_DIR=$(.venv/bin/python -c "import site; print(site.getsitepackages()[0])")/flashinfer_cubin
-    echo "Removing flashinfer_cubin to force JIT mode..."
-    rm -rf "${CUBIN_DIR}" "${CUBIN_DIR}"-*.dist-info 2>/dev/null || true
-fi
+# vLLM 0.20.2 bundles vllm.third_party.deep_gemm, making has_deep_gemm() return
+# True even when the backend is broken. Disabling via env var is the clean fix.
+export VLLM_USE_DEEP_GEMM=0
 
 mkdir -p logs
 
 
 free_port() { python3 -c "import socket; s=socket.socket(); s.bind(('',0)); p=s.getsockname()[1]; s.close(); print(p)"; }
 
-MODEL=${MODEL:-"Qwen/Qwen3-32B"}
-MODEL_TP=${MODEL_TP:-"1"}
-MODEL_PORT=${MODEL_PORT:-$(free_port)}
-ENABLE_THINKING=${ENABLE_THINKING:-"true"}
+# Resolve MODEL (env override > config default)
+MODEL="${MODEL:-}"
+if [ -z "${MODEL}" ]; then
+    MODEL=$(python3 -c "
+import yaml, pathlib
+print(yaml.safe_load(pathlib.Path('config_vllm.yaml').read_text()).get('eval', {}).get('default_model', ''))
+")
+fi
+if [ -z "${MODEL}" ]; then
+    echo "ERROR: MODEL not set and no default_model in config_vllm.yaml"
+    exit 1
+fi
 
-JUDGE_MODEL=${JUDGE_MODEL:-"openai/gpt-oss-120b"}
-JUDGE_TP=${JUDGE_TP:-"1"}
+# Load model-specific settings
+_model_vars=$(python3 - "$MODEL" <<'PYEOF'
+import yaml, pathlib, shlex, sys
+cfg = yaml.safe_load(pathlib.Path('config_vllm.yaml').read_text())
+model = sys.argv[1]
+models = cfg.get('models', {})
+if model not in models:
+    raise SystemExit(f"ERROR: Model '{model}' not found in config_vllm.yaml.\nAvailable: {list(models.keys())}")
+mcfg = models[model]
+print(f'_MODEL_TP={shlex.quote(str(mcfg.get("tp", 1)))}')
+thinking = mcfg.get("enable_thinking", True)
+print(f'_MODEL_THINKING={"true" if thinking else "false"}')
+print(f'_TOOL_CALL_PARSER={shlex.quote(str(mcfg.get("tool_call_parser", "")))}')
+print(f'_REASONING_PARSER={shlex.quote(str(mcfg.get("reasoning_parser", "")))}')
+PYEOF
+) || exit 1
+eval "$_model_vars"
+
+MODEL_TP=${MODEL_TP:-${_MODEL_TP:-"1"}}
+MODEL_PORT=${MODEL_PORT:-$(free_port)}
+ENABLE_THINKING=${ENABLE_THINKING:-${_MODEL_THINKING:-"true"}}
+TOOL_CALL_PARSER=${TOOL_CALL_PARSER:-${_TOOL_CALL_PARSER:-""}}
+REASONING_PARSER=${REASONING_PARSER:-${_REASONING_PARSER:-""}}
+
+# Load judge and eval defaults from config
+eval "$(python3 - <<'PYEOF'
+import yaml, pathlib, shlex
+cfg = yaml.safe_load(pathlib.Path('config_vllm.yaml').read_text())
+ecfg = cfg.get('eval', {})
+print(f'_JUDGE_MODEL={shlex.quote(str(ecfg.get("judge_model", "openai/gpt-oss-120b")))}')
+print(f'_JUDGE_TP={shlex.quote(str(ecfg.get("judge_tp", 1)))}')
+v = ecfg.get("domain", "all"); print(f'_DOMAIN={shlex.quote(str(v))}')
+v = ecfg.get("num_trials", 1); print(f'_NUM_TRIALS={shlex.quote(str(v))}')
+v = ecfg.get("num_tasks", ""); v = "" if v is None else v; print(f'_NUM_TASKS={shlex.quote(str(v))}')
+v = ecfg.get("max_concurrency", 4); print(f'_MAX_CONCURRENCY={shlex.quote(str(v))}')
+v = ecfg.get("task_timeout", 300); print(f'_TASK_TIMEOUT={shlex.quote(str(v))}')
+PYEOF
+)"
+
+JUDGE_MODEL=${JUDGE_MODEL:-${_JUDGE_MODEL:-"openai/gpt-oss-120b"}}
+JUDGE_TP=${JUDGE_TP:-${_JUDGE_TP:-"1"}}
 JUDGE_PORT=${JUDGE_PORT:-$(free_port)}
 
-DOMAIN=${DOMAIN:-"all"}
-NUM_TRIALS=${NUM_TRIALS:-"1"}
-NUM_TASKS=${NUM_TASKS:-""}
-MAX_CONCURRENCY=${MAX_CONCURRENCY:-"4"}
-TASK_TIMEOUT=${TASK_TIMEOUT:-"300"}
+DOMAIN=${DOMAIN:-${_DOMAIN:-"all"}}
+NUM_TRIALS=${NUM_TRIALS:-${_NUM_TRIALS:-"1"}}
+NUM_TASKS=${NUM_TASKS:-${_NUM_TASKS:-""}}
+MAX_CONCURRENCY=${MAX_CONCURRENCY:-${_MAX_CONCURRENCY:-"4"}}
+TASK_TIMEOUT=${TASK_TIMEOUT:-${_TASK_TIMEOUT:-"300"}}
 OUTPUT=${OUTPUT:-"$(echo ${MODEL} | awk -F/ '{print $NF}')"}
 
 # Resolve DOMAIN=all to core text domains
@@ -168,18 +213,24 @@ if [[ "$(echo "$ENABLE_THINKING" | tr '[:upper:]' '[:lower:]')" == "false" ]]; t
     THINKING_FLAG="--chat-template-kwargs {\"enable_thinking\": false}"
 fi
 
+REASONING_PARSER_FLAG=""
+if [ -n "${REASONING_PARSER}" ]; then
+    REASONING_PARSER_FLAG="--reasoning-parser ${REASONING_PARSER}"
+fi
+
 # Start agent model vLLM server
 echo "Starting agent vLLM server: ${MODEL} on port ${MODEL_PORT} (TP=${MODEL_TP})..."
 CUDA_VISIBLE_DEVICES=${GPU0} .venv/bin/vllm serve "${MODEL}" \
     --port "${MODEL_PORT}" \
     --tensor-parallel-size "${MODEL_TP}" \
     --dtype bfloat16 \
-    --enable-prefix-caching \
-    --enable-auto-tool-choice \
-    --tool-call-parser hermes \
-    --attention-backend FLASH_ATTN \
     --max-model-len 32768 \
     --gpu-memory-utilization 0.85 \
+    --attention-backend FLASH_ATTN \
+    --enable-prefix-caching \
+    --enable-auto-tool-choice \
+    --tool-call-parser "${TOOL_CALL_PARSER}" \
+    ${REASONING_PARSER_FLAG} \
     ${THINKING_FLAG} &
 MODEL_PID=$!
 
@@ -201,10 +252,10 @@ if [ -n "${JUDGE_MODEL}" ]; then
     CUDA_VISIBLE_DEVICES=${GPU1} .venv/bin/vllm serve "${JUDGE_MODEL}" \
         --port "${JUDGE_PORT}" \
         --tensor-parallel-size "${JUDGE_TP}" \
+        --served-model-name "$(echo ${JUDGE_MODEL} | sed 's|openai/||')" \
         --dtype bfloat16 \
-        --enable-prefix-caching \
         --max-model-len 32768 \
-        --served-model-name "$(echo ${JUDGE_MODEL} | sed 's|openai/||')" &
+        --enable-prefix-caching &
     JUDGE_PID=$!
 
     # Wait for judge model vLLM to be ready

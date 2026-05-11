@@ -2,7 +2,7 @@
 
 > **This is an internal AISG fork of [sierra-research/tau2-bench](https://github.com/sierra-research/tau2-bench) for evaluating locally-served models. It is not connected to the official tau-bench leaderboard and results are not submitted externally.**
 >
-> Default model under evaluation: [`Qwen/Qwen3-32B`](https://huggingface.co/Qwen/Qwen3-32B), served locally via vLLM. Judge: [`openai/gpt-oss-120b`](https://huggingface.co/openai/gpt-oss-120b), also served locally.
+> Default model under evaluation: [`Qwen/Qwen3.6-27B`](https://huggingface.co/Qwen/Qwen3.6-27B), served locally via vLLM. Judge: [`openai/gpt-oss-120b`](https://huggingface.co/openai/gpt-oss-120b), also served locally.
 
 $\tau^2$-bench simulates customer service agent evaluation across multiple text-based domains. An LLM agent follows a policy, uses tools, and completes tasks — graded against expected outcomes.
 
@@ -27,14 +27,14 @@ uv sync
 
 ### 2. Install vLLM and serve the model
 
-Works with CUDA 12.4 (default driver on the cluster):
+Works with CUDA 13 (loaded automatically in the SLURM script):
 
 ```bash
 uv sync --extra vllm
 ```
 
 ```bash
-.venv/bin/vllm serve Qwen/Qwen3-32B \
+.venv/bin/vllm serve Qwen/Qwen3.6-27B \
   --port 8000 \
   --tensor-parallel-size ${NUM_GPUS:-1}
 ```
@@ -71,34 +71,36 @@ Results are saved to `data/simulations/`. Use `tau2 view` to browse them.
 
 ### Running on SLURM
 
-For cluster jobs, use the provided script which handles vLLM startup, health-checking, and teardown:
+Use `submit_tau2bench.sh` to submit jobs. It reads model settings from `config_vllm.yaml` and automatically sets the correct GPU count:
 
 ```bash
-# Default run (Qwen3-32B, all core domains)
-sbatch run_tau2bench.slurm
+# Default model (from config_vllm.yaml eval.default_model)
+./submit_tau2bench.sh
 
-# Quick smoke test, 5 tasks per domain
-NUM_TASKS=5 sbatch run_tau2bench.slurm
+# Specific model
+./submit_tau2bench.sh Qwen/Qwen3-32B
+
+# Benchmark overrides via env vars
+NUM_TASKS=5 ./submit_tau2bench.sh
 
 # Single domain
-DOMAIN=retail sbatch run_tau2bench.slurm
-
-# Different model, more GPUs
-MODEL=aisingapore/Other-Model TENSOR_PARALLEL_SIZE=4 sbatch --gres=gpu:4 run_tau2bench.slurm
+DOMAIN=retail ./submit_tau2bench.sh Qwen/Qwen3.6-27B
 ```
 
-| SLURM variable         | Default                   | Description                                                         |
-| ---------------------- | ------------------------- | ------------------------------------------------------------------- |
-| `MODEL`                | `Qwen/Qwen3-32B`          | HuggingFace model ID under evaluation                               |
-| `MODEL_TP`             | `1`                       | Tensor parallel size for agent model                                |
-| `JUDGE_MODEL`          | `openai/gpt-oss-120b`     | Judge model for NL assertions (served locally on GPU 1)             |
-| `JUDGE_TP`             | `1`                       | Tensor parallel size for judge model                                |
-| `DOMAIN`               | `all`                     | `airline` (50), `retail` (114), `telecom` (114), `mock` (10), `all` |
-| `NUM_TRIALS`           | `1`                       | Trials per task for pass@k                                          |
-| `NUM_TASKS`            | *(all)*                   | Cap tasks per domain                                                |
-| `MAX_CONCURRENCY`      | `4`                      | Concurrent simulations (vLLM batches internally)                    |
-| `TASK_TIMEOUT`         | `300`                     | Max wallclock seconds per task before it's abandoned                |
-| `OUTPUT`               | `<model basename>`        | Output name under `data/simulations/`                               |
+To add a new model, add an entry to `config_vllm.yaml` under `models:` with its `tp`, `enable_thinking`, `tool_call_parser`, and `reasoning_parser`. No SLURM changes needed.
+
+| Variable               | Default                       | Source                              | Description                                              |
+| ---------------------- | ----------------------------- | ----------------------------------- | -------------------------------------------------------- |
+| `MODEL`                | `Qwen/Qwen3.6-27B`            | `config_vllm.yaml` → submit arg     | HuggingFace model ID under evaluation                    |
+| `MODEL_TP`             | `1`                           | `config_vllm.yaml models[MODEL].tp` | Tensor parallel size — set per model in config           |
+| `JUDGE_MODEL`          | `openai/gpt-oss-120b`         | `config_vllm.yaml eval.judge_model` | Judge model for NL assertions                            |
+| `JUDGE_TP`             | `1`                           | `config_vllm.yaml eval.judge_tp`    | Tensor parallel size for judge model                     |
+| `DOMAIN`               | `all`                         | `config_vllm.yaml eval.domain`      | `airline` (50), `retail` (114), `telecom` (114), `all`  |
+| `NUM_TRIALS`           | `1`                           | `config_vllm.yaml eval.num_trials`  | Trials per task for pass@k                               |
+| `NUM_TASKS`            | *(all)*                       | `config_vllm.yaml eval.num_tasks`   | Cap tasks per domain                                     |
+| `MAX_CONCURRENCY`      | `4`                           | `config_vllm.yaml eval.max_concurrency` | Concurrent simulations                               |
+| `TASK_TIMEOUT`         | `300`                         | `config_vllm.yaml eval.task_timeout` | Max wallclock seconds per task before abandoned         |
+| `OUTPUT`               | `<model basename>`            | SLURM script                        | Output name under `data/simulations/`                    |
 
 ## Reference
 
