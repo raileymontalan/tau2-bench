@@ -69,6 +69,51 @@ tau2 run --domain airline \
 
 Results are saved to `data/simulations/`. Use `tau2 view` to browse them.
 
+## Results
+
+After the job finishes, results for each domain are saved to:
+
+```
+data/simulations/<OUTPUT>_<domain>/results.json    # full simulation data
+data/simulations/<OUTPUT>_<domain>/summary.txt     # printed metrics
+```
+
+where `OUTPUT` defaults to the model basename (e.g. `Qwen3.6-27B`).
+
+**Per-domain summary output:**
+
+```
+Tasks:       50
+Simulations: 50
+Pass^1:      0.8000
+Avg Reward:  0.8000
+Write Acts:  40/50 (80.0%)
+DB Match:    45/50 (90.0%)
+```
+
+- **Pass^1** — fraction of tasks where at least 1 trial fully succeeded
+- **Avg Reward** — mean reward across all simulations (0–1)
+- **Write Acts** — correct write-action calls / total write-action calls
+- **DB Match** — simulations whose final DB state matched expected
+
+To re-score manually:
+
+```bash
+uv run python3 - data/simulations/Qwen3.6-27B_airline/results.json <<'PYEOF'
+import sys
+from pathlib import Path
+from tau2.data_model.simulation import Results
+from tau2.metrics.agent_metrics import compute_metrics
+results = Results.load(Path(sys.argv[1]))
+m = compute_metrics(results)
+pass1 = m.pass_hat_ks.get(1, m.avg_reward)
+print(f"Tasks:       {m.total_tasks}")
+print(f"Simulations: {m.total_simulations}")
+print(f"Pass^1:      {pass1:.4f}")
+print(f"Avg Reward:  {m.avg_reward:.4f}")
+PYEOF
+```
+
 ### Running on SLURM
 
 Use `submit_tau2bench.sh` to submit jobs. It reads model settings from `config_vllm.yaml` and automatically sets the correct GPU count:
@@ -87,7 +132,18 @@ NUM_TASKS=5 ./submit_tau2bench.sh
 DOMAIN=retail ./submit_tau2bench.sh Qwen/Qwen3.6-27B
 ```
 
-To add a new model, add an entry to `config_vllm.yaml` under `models:` with its `tp`, `enable_thinking`, `tool_call_parser`, and `reasoning_parser`. No SLURM changes needed.
+To add a new model, add an entry to `config_vllm.yaml` under `models:`:
+
+```yaml
+models:
+  Your/Model-Name:
+    tp: 1                        # number of GPUs (tensor parallel size)
+    enable_thinking: true        # false to disable thinking tokens
+    tool_call_parser: qwen3_coder  # vLLM tool call parser; check vLLM docs for your model
+    reasoning_parser: qwen3      # vLLM reasoning parser; omit or leave empty if not applicable
+```
+
+No SLURM changes needed. Submit with `./submit_tau2bench.sh Your/Model-Name`.
 
 | Variable               | Default                       | Source                              | Description                                              |
 | ---------------------- | ----------------------------- | ----------------------------------- | -------------------------------------------------------- |
