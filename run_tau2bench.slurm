@@ -272,10 +272,34 @@ echo "=== Results Summary ==="
 for CURRENT_DOMAIN in "${DOMAINS_TO_RUN[@]}"; do
     echo ""
     echo "--- Domain: ${CURRENT_DOMAIN} ---"
+    RESULTS_FILE="data/simulations/${OUTPUT}_${CURRENT_DOMAIN}/results.json"
     SUMMARY_FILE="data/simulations/${OUTPUT}_${CURRENT_DOMAIN}/summary.txt"
-    uv run tau2 view --dir "data/simulations/${OUTPUT}_${CURRENT_DOMAIN}" 2>/dev/null \
-        | tee "${SUMMARY_FILE}" || true
-    echo "Summary saved to ${SUMMARY_FILE}"
+    if [ -f "${RESULTS_FILE}" ]; then
+        echo "Loading results from ${RESULTS_FILE}..."
+        uv run python3 - "${RESULTS_FILE}" <<'PYEOF' | tee "${SUMMARY_FILE}"
+import sys
+from pathlib import Path
+from tau2.data_model.simulation import Results
+from tau2.metrics.agent_metrics import compute_metrics
+
+results = Results.load(Path(sys.argv[1]))
+m = compute_metrics(results)
+pass1 = m.pass_hat_ks.get(1, m.avg_reward)
+print(f"Tasks:       {m.total_tasks}")
+print(f"Simulations: {m.total_simulations}")
+print(f"Pass^1:      {pass1:.4f}")
+print(f"Avg Reward:  {m.avg_reward:.4f}")
+if m.total_write_actions > 0:
+    print(f"Write Acts:  {m.correct_write_actions}/{m.total_write_actions} ({m.correct_write_actions/m.total_write_actions*100:.1f}%)")
+db_total = m.db_match_count + m.db_mismatch_count
+if db_total > 0:
+    print(f"DB Match:    {m.db_match_count}/{db_total} ({m.db_match_count/db_total*100:.1f}%)")
+PYEOF
+        echo "Summary saved to ${SUMMARY_FILE}"
+    else
+        echo "No results file found: ${RESULTS_FILE}"
+        echo "Skipping domain ${CURRENT_DOMAIN}."
+    fi
 done
 
 exit $FINAL_EXIT
