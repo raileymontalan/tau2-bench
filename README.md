@@ -100,37 +100,45 @@ Use `tau2 view` (after `source .venv/bin/activate`) to browse simulations intera
 
 ### AISG evaluation results
 
-Models ordered alphabetically. Current data is 1-trial runs — Pass^2/^3 will populate after 3-trial re-runs.
+Models ordered alphabetically. Current data is 1-trial runs (3-trial re-runs in progress for cand models).
 
 | Model | Domain | Tasks | Avg | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
 |-------|--------|------:|----:|-------:|-------:|-------:|-------:|
+| aisingapore/qwen36_27b_cand1 | airline | 12† | 0.583 | 0.583 | 0.583 | — | — |
+| | retail | — | — | — | — | — | — |
+| | telecom | — | — | — | — | — | — |
+| | **TOTAL** | **12** | **0.583** | **0.583** | **0.583** | — | — |
+| aisingapore/qwen36_27b_cand2 | airline | 6† | 0.833 | 0.833 | 0.833 | — | — |
+| | retail | — | — | — | — | — | — |
+| | telecom | — | — | — | — | — | — |
+| | **TOTAL** | **6** | **0.833** | **0.833** | **0.833** | — | — |
 | google/gemma-4-31B-it | airline | 50 | 0.627 | 0.640 | 0.640 | — | — |
-| | retail | 114 | 0.689 | 0.658 | 0.658 | — | — |
-| | telecom | 114 | 0.281 | 0.281 | 0.281 | — | — |
-| | **TOTAL** | **278** | **0.510** | **0.500** | **0.500** | — | — |
-| google/gemma-4-E2B-it | airline | 48\* | 0.266 | 0.260 | 0.260 | — | — |
-| | retail | 113\* | 0.106 | 0.096 | 0.096 | — | — |
-| | telecom | 63\* | 0.140 | 0.026 | 0.026 | — | — |
-| | **TOTAL** | **224** | **0.150** | **0.112** | **0.112** | — | — |
-| google/gemma-4-E4B-it | airline | 49\* | 0.407 | 0.400 | 0.400 | — | — |
-| | retail | 113\* | 0.107 | 0.123 | 0.123 | — | — |
-| | telecom | 105\* | 0.157 | 0.132 | 0.132 | — | — |
-| | **TOTAL** | **267** | **0.182** | **0.177** | **0.177** | — | — |
-| Qwen/Qwen3.5-27B | airline | 50 | 0.685 | 0.660 | 0.660 | — | — |
+| | retail | 114 | 0.690 | 0.658 | 0.658 | — | — |
+| | telecom | 114 | 0.328 | 0.333 | 0.333 | — | — |
+| | **TOTAL** | **278** | **0.530** | **0.522** | **0.522** | — | — |
+| google/gemma-4-E2B-it | airline | 48\* | 0.261 | 0.260 | 0.260 | — | — |
+| | retail | 114 | 0.105 | 0.097 | 0.097 | — | — |
+| | telecom | 79\* | 0.141 | 0.070 | 0.070 | — | — |
+| | **TOTAL** | **241** | **0.148** | **0.120** | **0.120** | — | — |
+| google/gemma-4-E4B-it | airline | 49\* | 0.404 | 0.400 | 0.400 | — | — |
+| | retail | 113\* | 0.107 | 0.114 | 0.114 | — | — |
+| | telecom | 108\* | 0.173 | 0.158 | 0.158 | — | — |
+| | **TOTAL** | **270** | **0.187** | **0.184** | **0.184** | — | — |
+| Qwen/Qwen3.5-27B | airline | 50 | 0.625 | 0.500 | 0.500 | — | — |
 | | retail | 41\* | 0.439 | 0.158 | 0.158 | — | — |
 | | telecom | — | — | — | — | — | — |
-| | **TOTAL** | **91** | **0.574** | **0.434** | **0.434** | — | — |
-| Qwen/Qwen3.6-27B | airline | 50 | 0.635 | 0.620 | 0.620 | — | — |
+| | **TOTAL** | **91** | **0.541** | **0.346** | **0.346** | — | — |
+| Qwen/Qwen3.6-27B | airline | 50 | 0.602 | 0.580 | 0.580 | — | — |
 | | retail | 94\* | 0.479 | 0.395 | 0.395 | — | — |
 | | telecom | — | — | — | — | — | — |
-| | **TOTAL** | **144** | **0.533** | **0.473** | **0.473** | — | — |
+| | **TOTAL** | **144** | **0.521** | **0.459** | **0.459** | — | — |
 
-\* = run incomplete (fewer tasks than domain total). "—" = run did not complete.
+\* = run incomplete (fewer tasks than domain total). † = evaluation in progress. "—" = run did not complete.
 
 Re-run incomplete domains: `./submit_tau2bench.sh <model>` (uses `--auto-resume`).
 
 > **Known issue — gemma-4-E2B-it / E4B-it telecom infrastructure errors:**
-> Both Gemma E-series models produce empty assistant messages (no `content`, no `tool_calls`) when given telecom tool schemas, causing every retry to fail and simulations to be classified as `INFRASTRUCTURE_ERROR`. E2B has 213 affected simulations (63% of telecom), E4B has 75 (24%). This is a model capability limitation — the small models cannot handle the telecom schema complexity. Re-runs will not improve these numbers; telecom Pass^2/^3 will remain `—` for these models.
+> Both Gemma E-series models produce empty assistant messages (no `content`, no `tool_calls`) when given telecom tool schemas, causing every retry to fail and simulations to be classified as `INFRASTRUCTURE_ERROR`. This is a model capability limitation — the small models cannot handle the telecom schema complexity. Re-runs will not improve these numbers; telecom Pass^2/^3 will remain `—` for these models.
 
 Metric definitions:
 - **Avg** — mean reward across all simulations (0–1)
