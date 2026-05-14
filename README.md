@@ -129,6 +129,9 @@ Models ordered alphabetically. Current data is 1-trial runs — Pass^2/^3 will p
 
 Re-run incomplete domains: `./submit_tau2bench.sh <model>` (uses `--auto-resume`).
 
+> **Known issue — gemma-4-E2B-it / E4B-it telecom infrastructure errors:**
+> Both Gemma E-series models produce empty assistant messages (no `content`, no `tool_calls`) when given telecom tool schemas, causing every retry to fail and simulations to be classified as `INFRASTRUCTURE_ERROR`. E2B has 213 affected simulations (63% of telecom), E4B has 75 (24%). This is a model capability limitation — the small models cannot handle the telecom schema complexity. Re-runs will not improve these numbers; telecom Pass^2/^3 will remain `—` for these models.
+
 Metric definitions:
 - **Avg** — mean reward across all simulations (0–1)
 - **Pass@1** — fraction of tasks where ≥1 trial passed (reward ≥ 0.5); equals Pass^1 for 1-trial runs
