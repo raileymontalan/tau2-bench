@@ -1,5 +1,15 @@
+# tau2bench model configuration for local vLLM serving
+#
+# eval section: defaults used by submit_tau2bench.sh and run_tau2bench.slurm
+# models section: per-model vLLM serving parameters (tp, thinking, parsers)
+#
+# Add new models here to register them for evaluation.
+# model names must match the HuggingFace model ID.
+
 eval:
+  # Model under evaluation (agent)
   default_model: Qwen/Qwen3.6-27B
+  # Judge + user-simulator model
   judge_model: openai/gpt-oss-120b
   judge_tp: 1
   domain: all
@@ -11,13 +21,32 @@ eval:
 # Per-model settings keyed by HuggingFace model ID.
 # Add a new entry here to support a new model — no SLURM changes needed.
 models:
+  google/gemma-4-31B-it:
+    tp: 1
+    enable_thinking: true
+    reasoning_parser: gemma4
+    tool_call_parser: gemma4
+
+  google/gemma-4-E2B-it:
+    tp: 1
+    enable_thinking: true
+    reasoning_parser: gemma4
+    tool_call_parser: gemma4
+
+  google/gemma-4-E4B-it:
+    tp: 1
+    enable_thinking: true
+    reasoning_parser: gemma4
+    tool_call_parser: gemma4
+
+  Qwen/Qwen3.5-27B:
+    tp: 1
+    enable_thinking: true
+    reasoning_parser: qwen3
+    tool_call_parser: qwen3_coder
+
   Qwen/Qwen3.6-27B:
     tp: 1
     enable_thinking: true
-    tool_call_parser: qwen3_coder
     reasoning_parser: qwen3
-  Qwen/Qwen3-32B:
-    tp: 1
-    enable_thinking: true
     tool_call_parser: qwen3_coder
-    reasoning_parser: qwen3

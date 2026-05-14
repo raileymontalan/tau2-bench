@@ -62,8 +62,8 @@ OPENAI_API_KEY=dummy
 
 ```bash
 tau2 run --domain airline \
-  --agent-llm openai/Qwen/Qwen3-32B \
-  --user-llm openai/Qwen/Qwen3-32B \
+  --agent-llm openai/Qwen/Qwen3.6-27B \
+  --user-llm openai/Qwen/Qwen3.6-27B \
   --num-trials 1 --num-tasks 5
 ```
 
@@ -123,7 +123,7 @@ Use `submit_tau2bench.sh` to submit jobs. It reads model settings from `config_v
 ./submit_tau2bench.sh
 
 # Specific model
-./submit_tau2bench.sh Qwen/Qwen3-32B
+./submit_tau2bench.sh Qwen/Qwen3.6-27B
 
 # Benchmark overrides via env vars
 NUM_TASKS=5 ./submit_tau2bench.sh
