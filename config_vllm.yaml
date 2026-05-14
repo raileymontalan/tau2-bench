@@ -12,10 +12,13 @@ eval:
   # Judge + user-simulator model
   judge_model: openai/gpt-oss-120b
   judge_tp: 1
+  # "all" runs airline + retail + telecom sequentially
   domain: all
-  num_trials: 1
+  num_trials: 3
   num_tasks: ""
-  max_concurrency: 4
+  max_concurrency: 3
+  max_steps: 200
+  seed: 300
   task_timeout: 300
 
 # Per-model settings keyed by HuggingFace model ID.

@@ -45,8 +45,7 @@
 #     retail           — 114 tasks (base split)
 #     telecom          — 114 tasks (base split; full set has 2285)
 #     mock             — 10 tasks  (smoke test only, not for real evaluation)
-#     banking_knowledge — requires `uv sync --extra knowledge` and --retrieval-config
-#     all              — runs airline + retail + telecom sequentially (no banking_knowledge)
+#     all              — runs airline + retail + telecom sequentially
 #   Default: all
 #
 # NUM_TRIALS
@@ -60,7 +59,15 @@
 # MAX_CONCURRENCY
 #   Concurrent simulations. vLLM batches internally so raising this doesn't
 #   overwhelm the GPU — it just keeps the queue fuller.
-#   Default: 4
+#   Default: 3
+#
+# MAX_STEPS
+#   Maximum conversation turns per simulation before it's abandoned.
+#   Default: 200
+#
+# SEED
+#   Random seed for task sampling. Leaderboard submissions use 300.
+#   Default: 300
 #
 # TASK_TIMEOUT
 #   Max wallclock seconds per individual simulation before it's abandoned.
@@ -152,7 +159,9 @@ print(f'_JUDGE_TP={shlex.quote(str(ecfg.get("judge_tp", 1)))}')
 v = ecfg.get("domain", "all"); print(f'_DOMAIN={shlex.quote(str(v))}')
 v = ecfg.get("num_trials", 1); print(f'_NUM_TRIALS={shlex.quote(str(v))}')
 v = ecfg.get("num_tasks", ""); v = "" if v is None else v; print(f'_NUM_TASKS={shlex.quote(str(v))}')
-v = ecfg.get("max_concurrency", 4); print(f'_MAX_CONCURRENCY={shlex.quote(str(v))}')
+v = ecfg.get("max_concurrency", 3); print(f'_MAX_CONCURRENCY={shlex.quote(str(v))}')
+v = ecfg.get("max_steps", 200); print(f'_MAX_STEPS={shlex.quote(str(v))}')
+v = ecfg.get("seed", 300); print(f'_SEED={shlex.quote(str(v))}')
 v = ecfg.get("task_timeout", 300); print(f'_TASK_TIMEOUT={shlex.quote(str(v))}')
 PYEOF
 )"
@@ -164,7 +173,9 @@ JUDGE_PORT=${JUDGE_PORT:-$(free_port)}
 DOMAIN=${DOMAIN:-${_DOMAIN:-"all"}}
 NUM_TRIALS=${NUM_TRIALS:-${_NUM_TRIALS:-"1"}}
 NUM_TASKS=${NUM_TASKS:-${_NUM_TASKS:-""}}
-MAX_CONCURRENCY=${MAX_CONCURRENCY:-${_MAX_CONCURRENCY:-"4"}}
+MAX_CONCURRENCY=${MAX_CONCURRENCY:-${_MAX_CONCURRENCY:-"3"}}
+MAX_STEPS=${MAX_STEPS:-${_MAX_STEPS:-"200"}}
+SEED=${SEED:-${_SEED:-"300"}}
 TASK_TIMEOUT=${TASK_TIMEOUT:-${_TASK_TIMEOUT:-"300"}}
 MODEL_BASENAME="$(echo "${MODEL}" | awk -F/ '{print $NF}')"
 OUTPUT=${OUTPUT:-"${MODEL_BASENAME}"}
@@ -291,6 +302,8 @@ for CURRENT_DOMAIN in "${DOMAINS_TO_RUN[@]}"; do
         "--num-trials"      "${NUM_TRIALS}"
         "--save-to"         "${OUTPUT}_${CURRENT_DOMAIN}"
         "--max-concurrency" "${MAX_CONCURRENCY}"
+        "--max-steps"       "${MAX_STEPS}"
+        "--seed"            "${SEED}"
         "--timeout"         "${TASK_TIMEOUT}"
         "--auto-resume"
         "--log-level"       "INFO"
@@ -318,40 +331,10 @@ if [ -n "${JUDGE_PID}" ]; then
     kill "${JUDGE_PID}"
 fi
 
-# Print and save results summary for each domain
+# Print and save results summary
 echo ""
 echo "=== Results Summary ==="
-for CURRENT_DOMAIN in "${DOMAINS_TO_RUN[@]}"; do
-    echo ""
-    echo "--- Domain: ${CURRENT_DOMAIN} ---"
-    RESULTS_FILE="data/simulations/${OUTPUT}_${CURRENT_DOMAIN}/results.json"
-    SUMMARY_FILE="data/simulations/${OUTPUT}_${CURRENT_DOMAIN}/summary.txt"
-    if [ -f "${RESULTS_FILE}" ]; then
-        echo "Loading results from ${RESULTS_FILE}..."
-        uv run python3 - "${RESULTS_FILE}" <<'PYEOF' | tee "${SUMMARY_FILE}"
-import sys
-from pathlib import Path
-from tau2.data_model.simulation import Results
-from tau2.metrics.agent_metrics import compute_metrics
-
-results = Results.load(Path(sys.argv[1]))
-m = compute_metrics(results)
-pass1 = m.pass_hat_ks.get(1, m.avg_reward)
-print(f"Tasks:       {m.total_tasks}")
-print(f"Simulations: {m.total_simulations}")
-print(f"Pass^1:      {pass1:.4f}")
-print(f"Avg Reward:  {m.avg_reward:.4f}")
-if m.total_write_actions > 0:
-    print(f"Write Acts:  {m.correct_write_actions}/{m.total_write_actions} ({m.correct_write_actions/m.total_write_actions*100:.1f}%)")
-db_total = m.db_match_count + m.db_mismatch_count
-if db_total > 0:
-    print(f"DB Match:    {m.db_match_count}/{db_total} ({m.db_match_count/db_total*100:.1f}%)")
-PYEOF
-        echo "Summary saved to ${SUMMARY_FILE}"
-    else
-        echo "No results file found: ${RESULTS_FILE}"
-        echo "Skipping domain ${CURRENT_DOMAIN}."
-    fi
-done
+uv run python3 score_summary.py data/simulations/ 2>&1 | tee "data/simulations/${OUTPUT}_summary.txt"
+echo "Summary saved to data/simulations/${OUTPUT}_summary.txt"
 
 exit $FINAL_EXIT
