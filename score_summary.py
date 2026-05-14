@@ -178,10 +178,10 @@ def main():
     k_values = list(range(1, max_k + 1))
 
     # ── Header ────────────────────────────────────────────────────────────────
-    pass_header = "  ".join(
-        f"{'Pass@'+str(k):>7s}  {'Pass^'+str(k):>7s}" for k in k_values
-    )
-    header = f"{'Model':<25s}  {'Domain':<8s}  {'Tasks':>5s}  {'Avg':>5s}  {pass_header}"
+    # Pass@1 (any pass) differs from Pass^1 (per-trial rate) only when k>1.
+    # For k≥2 Pass@k == Pass^k (both = fraction with ≥k passes), so omit Pass@k for k≥2.
+    hat_cols = "  ".join(f"{'Pass^'+str(k):>7s}" for k in k_values if k >= 2)
+    header = f"{'Model':<25s}  {'Domain':<8s}  {'Tasks':>5s}  {'Avg':>5s}  {'Pass@1':>7s}  {'Pass^1':>7s}  {hat_cols}"
     print(header)
     print("─" * len(header))
 
@@ -199,16 +199,16 @@ def main():
             first_row = False
 
             if r is None:
-                pass_vals = "  ".join("—".rjust(7) + "  " + "—".rjust(7) for _ in k_values)
-                expected = DOMAIN_TASKS.get(domain, "?")
-                print(f"{label:<25s}  {domain:<8s}  {'—':>5s}  {'—':>5s}  {pass_vals}")
+                blank = "  ".join("—".rjust(7) for _ in range(2 + len([k for k in k_values if k >= 2])))
+                print(f"{label:<25s}  {domain:<8s}  {'—':>5s}  {'—':>5s}  {blank}")
                 model_json["domains"][domain] = None
             else:
                 expected = DOMAIN_TASKS.get(domain, r["tasks"])
                 incomplete = "*" if r["tasks"] < expected else " "
-                pass_vals = "  ".join(
-                    _fmt(r["pass_at"].get(k)) + "  " + _fmt(r["pass_hat"].get(k))
-                    for k in k_values
+                pass_vals = (
+                    _fmt(r["pass_at"].get(1)) + "  " +
+                    _fmt(r["pass_hat"].get(1)) + "  " +
+                    "  ".join(_fmt(r["pass_hat"].get(k)) for k in k_values if k >= 2)
                 )
                 print(
                     f"{label:<25s}  {domain:<8s}  {r['tasks']:>4d}{incomplete}"
@@ -235,9 +235,10 @@ def main():
                 for k in k_values
             }
             n_domains = len(completed)
-            pass_vals = "  ".join(
-                _fmt(agg_pass_at.get(k)) + "  " + _fmt(agg_pass_hat.get(k))
-                for k in k_values
+            pass_vals = (
+                _fmt(agg_pass_at.get(1)) + "  " +
+                _fmt(agg_pass_hat.get(1)) + "  " +
+                "  ".join(_fmt(agg_pass_hat.get(k)) for k in k_values if k >= 2)
             )
             print(
                 f"{'':25s}  {'TOTAL':8s}  {agg_tasks:>5d}"
@@ -264,8 +265,9 @@ def main():
     ):
         print("* = incomplete (fewer tasks than expected)")
     print()
-    print(f"Pass@k = fraction of tasks where ≥k trials passed  (optimistic)")
-    print(f"Pass^k = per-trial pass rate (k=1) or fraction with ≥k passes (k>1)")
+    print(f"Pass@1 = fraction of tasks where ≥1 trial passed  (optimistic; upper bound on capability)")
+    print(f"Pass^1 = per-trial pass rate: passing trials / total trials  (differs from Pass@1 when n_trials > 1)")
+    print(f"Pass^k = fraction of tasks where ≥k trials passed  (k≥2; Pass@k omitted — same value)")
 
     # ── Save JSON ──────────────────────────────────────────────────────────────
     out_file = root / "score_summary.json"
