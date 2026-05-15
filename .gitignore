@@ -224,3 +224,6 @@ data/simulations/.credentials/
 
 # Cursor IDE
 .cursor/
+
+# Include score summaries
+!data/simulations/score_summary.json

@@ -17,146 +17,147 @@ $\tau^2$-bench simulates customer service agent evaluation across multiple text-
 
 ## Quick Start
 
-### 1. Install
+### 1. Install (one-time, GPU node required)
 
 ```bash
-git clone https://github.com/raileymontalan/tau2-bench.git
-cd tau2-bench
-uv sync
+sbatch setup_env.slurm
 ```
 
-### 2. Install vLLM and serve the model
+Check `logs/setup_<jobid>.out` for completion. Creates `.venv/` with tau2-bench + vLLM. A GPU node is required — vLLM compiles CUDA kernels on first install.
 
-Works with CUDA 13 (loaded automatically in the SLURM script):
+### 2. Add models to evaluate
+
+Edit `config_vllm.yaml`:
+
+```yaml
+eval:
+  default_model: Qwen/Qwen3.6-27B   # ← change this to switch default
+
+models:
+  Qwen/Qwen3.6-27B:
+    tp: 1
+    enable_thinking: true
+    reasoning_parser: qwen3
+    tool_call_parser: qwen3_coder
+
+  # Example: add a new model
+  Your/Model-Name:
+    tp: 1
+    enable_thinking: true
+    tool_call_parser: qwen3_coder   # check vLLM docs for your model
+    reasoning_parser: qwen3
+```
+
+`tp` = tensor parallel size (number of GPUs). The submit script reads this to request the right GPU count automatically.
+
+### 3. Submit
 
 ```bash
-uv sync --extra vllm
+# Default model from config_vllm.yaml
+./submit_tau2bench.sh
+
+# Specific model
+./submit_tau2bench.sh Qwen/Qwen3.6-27B
+
+# Single domain
+DOMAIN=retail ./submit_tau2bench.sh Qwen/Qwen3.6-27B
+
+# Smoke test (10 tasks)
+NUM_TASKS=5 DOMAIN=airline ./submit_tau2bench.sh
 ```
+
+Logs: `logs/tau2bench-<jobid>.out`
+
+Resume an interrupted run by passing `OUTPUT=<existing-dir-basename>`:
 
 ```bash
-.venv/bin/vllm serve Qwen/Qwen3.6-27B \
-  --port 8000 \
-  --tensor-parallel-size ${NUM_GPUS:-1}
+OUTPUT=Qwen3.6-27B ./submit_tau2bench.sh Qwen/Qwen3.6-27B
 ```
 
-Set `HF_HOME` if model weights are cached in a non-default location:
-
-```bash
-export HF_HOME="${SHARED_FS_DIR}/hf_cache"
-```
-
-### 3. Set up environment
-
-```bash
-cp .env.example .env
-```
-
-Add to `.env`:
-
-```bash
-OPENAI_API_BASE=http://localhost:8000/v1
-OPENAI_API_KEY=dummy
-```
-
-### 4. Run an evaluation
-
-```bash
-tau2 run --domain airline \
-  --agent-llm openai/Qwen/Qwen3-32B \
-  --user-llm openai/Qwen/Qwen3-32B \
-  --num-trials 1 --num-tasks 5
-```
-
-Results are saved to `data/simulations/`. Use `tau2 view` to browse them.
+| Variable          | Default                             | Source                                  | Description                                             |
+| ----------------- | ----------------------------------- | --------------------------------------- | ------------------------------------------------------- |
+| `MODEL`           | `Qwen/Qwen3.6-27B`                  | `config_vllm.yaml` → submit arg         | HuggingFace model ID under evaluation                   |
+| `MODEL_TP`        | `1`                                 | `config_vllm.yaml models[MODEL].tp`     | Tensor parallel size — set per model in config          |
+| `JUDGE_MODEL`     | `openai/gpt-oss-120b`               | `config_vllm.yaml eval.judge_model`     | Judge model for NL assertions                           |
+| `JUDGE_TP`        | `1`                                 | `config_vllm.yaml eval.judge_tp`        | Tensor parallel size for judge model                    |
+| `DOMAIN`          | `all`                               | `config_vllm.yaml eval.domain`          | `airline` (50), `retail` (114), `telecom` (114), `all` |
+| `NUM_TRIALS`      | `1`                                 | `config_vllm.yaml eval.num_trials`      | Trials per task for pass@k                              |
+| `NUM_TASKS`       | *(all)*                             | `config_vllm.yaml eval.num_tasks`       | Cap tasks per domain                                    |
+| `MAX_CONCURRENCY` | `4`                                 | `config_vllm.yaml eval.max_concurrency` | Concurrent simulations                                  |
+| `TASK_TIMEOUT`    | `300`                               | `config_vllm.yaml eval.task_timeout`    | Max wallclock seconds per task before abandoned         |
+| `OUTPUT`          | `<model basename>`                  | SLURM script                            | Output name under `data/simulations/`                   |
 
 ## Results
 
-After the job finishes, results for each domain are saved to:
+Results for each domain are saved to:
 
 ```
 data/simulations/<OUTPUT>_<domain>/results.json    # full simulation data
 data/simulations/<OUTPUT>_<domain>/summary.txt     # printed metrics
 ```
 
-where `OUTPUT` defaults to the model basename (e.g. `Qwen3.6-27B`).
+Use `tau2 view` (after `source .venv/bin/activate`) to browse simulations interactively.
 
-**Per-domain summary output:**
+### AISG evaluation results
 
-```
-Tasks:       50
-Simulations: 50
-Pass^1:      0.8000
-Avg Reward:  0.8000
-Write Acts:  40/50 (80.0%)
-DB Match:    45/50 (90.0%)
-```
+Models ordered alphabetically. Current data is 1-trial runs (3-trial re-runs in progress for cand models).
 
-- **Pass^1** — fraction of tasks where at least 1 trial fully succeeded
-- **Avg Reward** — mean reward across all simulations (0–1)
-- **Write Acts** — correct write-action calls / total write-action calls
-- **DB Match** — simulations whose final DB state matched expected
+| Model | Domain | Tasks | Avg | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
+|-------|--------|------:|----:|-------:|-------:|-------:|-------:|
+| aisingapore/qwen36_27b_cand1 | airline | 12† | 0.583 | 0.583 | 0.583 | — | — |
+| | retail | — | — | — | — | — | — |
+| | telecom | — | — | — | — | — | — |
+| | **TOTAL** | **12** | **0.583** | **0.583** | **0.583** | — | — |
+| aisingapore/qwen36_27b_cand2 | airline | 6† | 0.833 | 0.833 | 0.833 | — | — |
+| | retail | — | — | — | — | — | — |
+| | telecom | — | — | — | — | — | — |
+| | **TOTAL** | **6** | **0.833** | **0.833** | **0.833** | — | — |
+| google/gemma-4-31B-it | airline | 50 | 0.627 | 0.640 | 0.640 | — | — |
+| | retail | 114 | 0.690 | 0.658 | 0.658 | — | — |
+| | telecom | 114 | 0.328 | 0.333 | 0.333 | — | — |
+| | **TOTAL** | **278** | **0.530** | **0.522** | **0.522** | — | — |
+| google/gemma-4-E2B-it | airline | 48\* | 0.261 | 0.260 | 0.260 | — | — |
+| | retail | 114 | 0.105 | 0.097 | 0.097 | — | — |
+| | telecom | 79\* | 0.141 | 0.070 | 0.070 | — | — |
+| | **TOTAL** | **241** | **0.148** | **0.120** | **0.120** | — | — |
+| google/gemma-4-E4B-it | airline | 49\* | 0.404 | 0.400 | 0.400 | — | — |
+| | retail | 113\* | 0.107 | 0.114 | 0.114 | — | — |
+| | telecom | 108\* | 0.173 | 0.158 | 0.158 | — | — |
+| | **TOTAL** | **270** | **0.187** | **0.184** | **0.184** | — | — |
+| Qwen/Qwen3.5-27B | airline | 50 | 0.625 | 0.500 | 0.500 | — | — |
+| | retail | 41\* | 0.439 | 0.158 | 0.158 | — | — |
+| | telecom | — | — | — | — | — | — |
+| | **TOTAL** | **91** | **0.541** | **0.346** | **0.346** | — | — |
+| Qwen/Qwen3.6-27B | airline | 50 | 0.602 | 0.580 | 0.580 | — | — |
+| | retail | 94\* | 0.479 | 0.395 | 0.395 | — | — |
+| | telecom | — | — | — | — | — | — |
+| | **TOTAL** | **144** | **0.521** | **0.459** | **0.459** | — | — |
+
+\* = run incomplete (fewer tasks than domain total). † = evaluation in progress. "—" = run did not complete.
+
+Re-run incomplete domains: `./submit_tau2bench.sh <model>` (uses `--auto-resume`).
+
+> **Known issue — gemma-4-E2B-it / E4B-it telecom infrastructure errors:**
+> Both Gemma E-series models produce empty assistant messages (no `content`, no `tool_calls`) when given telecom tool schemas, causing every retry to fail and simulations to be classified as `INFRASTRUCTURE_ERROR`. This is a model capability limitation — the small models cannot handle the telecom schema complexity. Re-runs will not improve these numbers; telecom Pass^2/^3 will remain `—` for these models.
+
+Metric definitions:
+- **Avg** — mean reward across all simulations (0–1)
+- **Pass@1** — fraction of tasks where ≥1 trial passed (reward ≥ 0.5); equals Pass^1 for 1-trial runs
+- **Pass^1** — per-trial pass rate across all task-trial pairs
+- **Pass^2** — fraction of tasks where ≥2 trials passed
+- **Pass^3** — fraction of tasks where all 3 trials passed (strict reliability)
 
 To re-score manually:
 
 ```bash
-uv run python3 - data/simulations/Qwen3.6-27B_airline/results.json <<'PYEOF'
-import sys
-from pathlib import Path
-from tau2.data_model.simulation import Results
-from tau2.metrics.agent_metrics import compute_metrics
-results = Results.load(Path(sys.argv[1]))
-m = compute_metrics(results)
-pass1 = m.pass_hat_ks.get(1, m.avg_reward)
-print(f"Tasks:       {m.total_tasks}")
-print(f"Simulations: {m.total_simulations}")
-print(f"Pass^1:      {pass1:.4f}")
-print(f"Avg Reward:  {m.avg_reward:.4f}")
-PYEOF
+python score_summary.py data/simulations/
 ```
 
-### Running on SLURM
-
-Use `submit_tau2bench.sh` to submit jobs. It reads model settings from `config_vllm.yaml` and automatically sets the correct GPU count:
+Or for a single domain dir:
 
 ```bash
-# Default model (from config_vllm.yaml eval.default_model)
-./submit_tau2bench.sh
-
-# Specific model
-./submit_tau2bench.sh Qwen/Qwen3-32B
-
-# Benchmark overrides via env vars
-NUM_TASKS=5 ./submit_tau2bench.sh
-
-# Single domain
-DOMAIN=retail ./submit_tau2bench.sh Qwen/Qwen3.6-27B
+python score_summary.py data/simulations/Qwen3.6-27B_airline
 ```
-
-To add a new model, add an entry to `config_vllm.yaml` under `models:`:
-
-```yaml
-models:
-  Your/Model-Name:
-    tp: 1                        # number of GPUs (tensor parallel size)
-    enable_thinking: true        # false to disable thinking tokens
-    tool_call_parser: qwen3_coder  # vLLM tool call parser; check vLLM docs for your model
-    reasoning_parser: qwen3      # vLLM reasoning parser; omit or leave empty if not applicable
-```
-
-No SLURM changes needed. Submit with `./submit_tau2bench.sh Your/Model-Name`.
-
-| Variable               | Default                       | Source                              | Description                                              |
-| ---------------------- | ----------------------------- | ----------------------------------- | -------------------------------------------------------- |
-| `MODEL`                | `Qwen/Qwen3.6-27B`            | `config_vllm.yaml` → submit arg     | HuggingFace model ID under evaluation                    |
-| `MODEL_TP`             | `1`                           | `config_vllm.yaml models[MODEL].tp` | Tensor parallel size — set per model in config           |
-| `JUDGE_MODEL`          | `openai/gpt-oss-120b`         | `config_vllm.yaml eval.judge_model` | Judge model for NL assertions                            |
-| `JUDGE_TP`             | `1`                           | `config_vllm.yaml eval.judge_tp`    | Tensor parallel size for judge model                     |
-| `DOMAIN`               | `all`                         | `config_vllm.yaml eval.domain`      | `airline` (50), `retail` (114), `telecom` (114), `all`  |
-| `NUM_TRIALS`           | `1`                           | `config_vllm.yaml eval.num_trials`  | Trials per task for pass@k                               |
-| `NUM_TASKS`            | *(all)*                       | `config_vllm.yaml eval.num_tasks`   | Cap tasks per domain                                     |
-| `MAX_CONCURRENCY`      | `4`                           | `config_vllm.yaml eval.max_concurrency` | Concurrent simulations                               |
-| `TASK_TIMEOUT`         | `300`                         | `config_vllm.yaml eval.task_timeout` | Max wallclock seconds per task before abandoned         |
-| `OUTPUT`               | `<model basename>`            | SLURM script                        | Output name under `data/simulations/`                    |
 
 ## Reference
 

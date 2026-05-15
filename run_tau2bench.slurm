@@ -22,7 +22,7 @@
 #
 # MODEL_PORT
 #   Port for local vLLM server.
-#   Default: 8004
+#   Default: auto-assigned free port
 #
 # JUDGE_MODEL
 #   HuggingFace model ID for NL assertions judge. Served on a separate vLLM
@@ -37,7 +37,7 @@
 #
 # JUDGE_PORT
 #   Port for judge vLLM server.
-#   Default: 8005
+#   Default: auto-assigned free port
 #
 # DOMAIN
 #   Domain(s) to evaluate. One of:
@@ -45,8 +45,7 @@
 #     retail           — 114 tasks (base split)
 #     telecom          — 114 tasks (base split; full set has 2285)
 #     mock             — 10 tasks  (smoke test only, not for real evaluation)
-#     banking_knowledge — requires `uv sync --extra knowledge` and --retrieval-config
-#     all              — runs airline + retail + telecom sequentially (no banking_knowledge)
+#     all              — runs airline + retail + telecom sequentially
 #   Default: all
 #
 # NUM_TRIALS
@@ -60,7 +59,15 @@
 # MAX_CONCURRENCY
 #   Concurrent simulations. vLLM batches internally so raising this doesn't
 #   overwhelm the GPU — it just keeps the queue fuller.
-#   Default: 4
+#   Default: 3
+#
+# MAX_STEPS
+#   Maximum conversation turns per simulation before it's abandoned.
+#   Default: 200
+#
+# SEED
+#   Random seed for task sampling. Leaderboard submissions use 300.
+#   Default: 300
 #
 # TASK_TIMEOUT
 #   Max wallclock seconds per individual simulation before it's abandoned.
@@ -80,7 +87,7 @@
 #SBATCH --mem=256G
 #SBATCH --gres=gpu:2
 #SBATCH --time=24:00:00
-#SBATCH --nodelist=smc-pod-[3,5,8]
+#SBATCH --nodelist=smc-pod-[14,8,5]
 #SBATCH --output=logs/tau2bench-%j.out
 #SBATCH --error=logs/tau2bench-%j.out
 
@@ -132,6 +139,7 @@ thinking = mcfg.get("enable_thinking", True)
 print(f'_MODEL_THINKING={"true" if thinking else "false"}')
 print(f'_TOOL_CALL_PARSER={shlex.quote(str(mcfg.get("tool_call_parser", "")))}')
 print(f'_REASONING_PARSER={shlex.quote(str(mcfg.get("reasoning_parser", "")))}')
+print(f'_MODEL_PATH={shlex.quote(str(mcfg.get("model_path", model)))}')
 PYEOF
 ) || exit 1
 eval "$_model_vars"
@@ -141,6 +149,8 @@ MODEL_PORT=${MODEL_PORT:-$(free_port)}
 ENABLE_THINKING=${ENABLE_THINKING:-${_MODEL_THINKING:-"true"}}
 TOOL_CALL_PARSER=${TOOL_CALL_PARSER:-${_TOOL_CALL_PARSER:-""}}
 REASONING_PARSER=${REASONING_PARSER:-${_REASONING_PARSER:-""}}
+MODEL_PATH=${MODEL_PATH:-${_MODEL_PATH:-"${MODEL}"}}
+MODEL_BASENAME="$(echo "${MODEL}" | awk -F/ '{print $NF}')"
 
 # Load judge and eval defaults from config
 eval "$(python3 - <<'PYEOF'
@@ -152,7 +162,9 @@ print(f'_JUDGE_TP={shlex.quote(str(ecfg.get("judge_tp", 1)))}')
 v = ecfg.get("domain", "all"); print(f'_DOMAIN={shlex.quote(str(v))}')
 v = ecfg.get("num_trials", 1); print(f'_NUM_TRIALS={shlex.quote(str(v))}')
 v = ecfg.get("num_tasks", ""); v = "" if v is None else v; print(f'_NUM_TASKS={shlex.quote(str(v))}')
-v = ecfg.get("max_concurrency", 4); print(f'_MAX_CONCURRENCY={shlex.quote(str(v))}')
+v = ecfg.get("max_concurrency", 3); print(f'_MAX_CONCURRENCY={shlex.quote(str(v))}')
+v = ecfg.get("max_steps", 200); print(f'_MAX_STEPS={shlex.quote(str(v))}')
+v = ecfg.get("seed", 300); print(f'_SEED={shlex.quote(str(v))}')
 v = ecfg.get("task_timeout", 300); print(f'_TASK_TIMEOUT={shlex.quote(str(v))}')
 PYEOF
 )"
@@ -164,9 +176,11 @@ JUDGE_PORT=${JUDGE_PORT:-$(free_port)}
 DOMAIN=${DOMAIN:-${_DOMAIN:-"all"}}
 NUM_TRIALS=${NUM_TRIALS:-${_NUM_TRIALS:-"1"}}
 NUM_TASKS=${NUM_TASKS:-${_NUM_TASKS:-""}}
-MAX_CONCURRENCY=${MAX_CONCURRENCY:-${_MAX_CONCURRENCY:-"4"}}
+MAX_CONCURRENCY=${MAX_CONCURRENCY:-${_MAX_CONCURRENCY:-"3"}}
+MAX_STEPS=${MAX_STEPS:-${_MAX_STEPS:-"200"}}
+SEED=${SEED:-${_SEED:-"300"}}
 TASK_TIMEOUT=${TASK_TIMEOUT:-${_TASK_TIMEOUT:-"300"}}
-OUTPUT=${OUTPUT:-"$(echo ${MODEL} | awk -F/ '{print $NF}')"}
+OUTPUT=${OUTPUT:-"${MODEL_BASENAME}"}
 
 # Resolve DOMAIN=all to core text domains
 if [ "${DOMAIN}" = "all" ]; then
@@ -204,9 +218,11 @@ if [ ${#VISIBLE_DEVICES[@]} -eq 0 ] && [ -n "$CUDA_VISIBLE_DEVICES" ]; then
     IFS=',' read -ra VISIBLE_DEVICES <<< "$CUDA_VISIBLE_DEVICES"
 fi
 
-GPU0=${VISIBLE_DEVICES[0]:-0}
-GPU1=${VISIBLE_DEVICES[1]:-1}
-GPU2=${VISIBLE_DEVICES[2]:-2}
+# Partition GPUs: first MODEL_TP for agent, next JUDGE_TP for judge
+MODEL_GPUS=$(IFS=','; echo "${VISIBLE_DEVICES[*]:0:${MODEL_TP}}")
+MODEL_GPUS=${MODEL_GPUS:-0}
+JUDGE_GPUS=$(IFS=','; echo "${VISIBLE_DEVICES[*]:${MODEL_TP}:${JUDGE_TP}}")
+JUDGE_GPUS=${JUDGE_GPUS:-1}
 
 THINKING_FLAG=""
 if [[ "$(echo "$ENABLE_THINKING" | tr '[:upper:]' '[:lower:]')" == "false" ]]; then
@@ -220,13 +236,12 @@ fi
 
 # Start agent model vLLM server
 echo "Starting agent vLLM server: ${MODEL} on port ${MODEL_PORT} (TP=${MODEL_TP})..."
-CUDA_VISIBLE_DEVICES=${GPU0} .venv/bin/vllm serve "${MODEL}" \
+CUDA_VISIBLE_DEVICES=${MODEL_GPUS} .venv/bin/vllm serve "${MODEL_PATH}" \
     --port "${MODEL_PORT}" \
     --tensor-parallel-size "${MODEL_TP}" \
+    --served-model-name "$(echo "${MODEL}" | awk -F/ '{print $NF}')" \
     --dtype bfloat16 \
-    --max-model-len 32768 \
     --gpu-memory-utilization 0.85 \
-    --attention-backend FLASH_ATTN \
     --enable-prefix-caching \
     --enable-auto-tool-choice \
     --tool-call-parser "${TOOL_CALL_PARSER}" \
@@ -249,12 +264,11 @@ echo "Model vLLM server ready."
 JUDGE_PID=""
 if [ -n "${JUDGE_MODEL}" ]; then
     echo "Starting judge vLLM server: ${JUDGE_MODEL} on port ${JUDGE_PORT} (TP=${JUDGE_TP})..."
-    CUDA_VISIBLE_DEVICES=${GPU1} .venv/bin/vllm serve "${JUDGE_MODEL}" \
+    CUDA_VISIBLE_DEVICES=${JUDGE_GPUS} .venv/bin/vllm serve "${JUDGE_MODEL}" \
         --port "${JUDGE_PORT}" \
         --tensor-parallel-size "${JUDGE_TP}" \
         --served-model-name "$(echo ${JUDGE_MODEL} | sed 's|openai/||')" \
         --dtype bfloat16 \
-        --max-model-len 32768 \
         --enable-prefix-caching &
     JUDGE_PID=$!
 
@@ -285,11 +299,13 @@ for CURRENT_DOMAIN in "${DOMAINS_TO_RUN[@]}"; do
     tau2_args=(
         "uv" "run" "tau2" "run"
         "--domain"          "${CURRENT_DOMAIN}"
-        "--agent-llm"       "openai/${MODEL}"
-        "--user-llm"        "openai/${MODEL}"
+        "--agent-llm"       "openai/${MODEL_BASENAME}"
+        "--user-llm"        "openai/${MODEL_BASENAME}"
         "--num-trials"      "${NUM_TRIALS}"
         "--save-to"         "${OUTPUT}_${CURRENT_DOMAIN}"
         "--max-concurrency" "${MAX_CONCURRENCY}"
+        "--max-steps"       "${MAX_STEPS}"
+        "--seed"            "${SEED}"
         "--timeout"         "${TASK_TIMEOUT}"
         "--auto-resume"
         "--log-level"       "INFO"
@@ -317,40 +333,10 @@ if [ -n "${JUDGE_PID}" ]; then
     kill "${JUDGE_PID}"
 fi
 
-# Print and save results summary for each domain
+# Print and save results summary
 echo ""
 echo "=== Results Summary ==="
-for CURRENT_DOMAIN in "${DOMAINS_TO_RUN[@]}"; do
-    echo ""
-    echo "--- Domain: ${CURRENT_DOMAIN} ---"
-    RESULTS_FILE="data/simulations/${OUTPUT}_${CURRENT_DOMAIN}/results.json"
-    SUMMARY_FILE="data/simulations/${OUTPUT}_${CURRENT_DOMAIN}/summary.txt"
-    if [ -f "${RESULTS_FILE}" ]; then
-        echo "Loading results from ${RESULTS_FILE}..."
-        uv run python3 - "${RESULTS_FILE}" <<'PYEOF' | tee "${SUMMARY_FILE}"
-import sys
-from pathlib import Path
-from tau2.data_model.simulation import Results
-from tau2.metrics.agent_metrics import compute_metrics
-
-results = Results.load(Path(sys.argv[1]))
-m = compute_metrics(results)
-pass1 = m.pass_hat_ks.get(1, m.avg_reward)
-print(f"Tasks:       {m.total_tasks}")
-print(f"Simulations: {m.total_simulations}")
-print(f"Pass^1:      {pass1:.4f}")
-print(f"Avg Reward:  {m.avg_reward:.4f}")
-if m.total_write_actions > 0:
-    print(f"Write Acts:  {m.correct_write_actions}/{m.total_write_actions} ({m.correct_write_actions/m.total_write_actions*100:.1f}%)")
-db_total = m.db_match_count + m.db_mismatch_count
-if db_total > 0:
-    print(f"DB Match:    {m.db_match_count}/{db_total} ({m.db_match_count/db_total*100:.1f}%)")
-PYEOF
-        echo "Summary saved to ${SUMMARY_FILE}"
-    else
-        echo "No results file found: ${RESULTS_FILE}"
-        echo "Skipping domain ${CURRENT_DOMAIN}."
-    fi
-done
+uv run python3 score_summary.py data/simulations/ 2>&1 | tee "data/simulations/${OUTPUT}_summary.txt"
+echo "Summary saved to data/simulations/${OUTPUT}_summary.txt"
 
 exit $FINAL_EXIT

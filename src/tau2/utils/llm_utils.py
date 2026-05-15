@@ -378,6 +378,8 @@ def generate(
     validate_message_history(messages)
     if kwargs.get("num_retries") is None:
         kwargs["num_retries"] = DEFAULT_MAX_RETRIES
+    if kwargs.get("timeout") is None:
+        kwargs["timeout"] = 300
 
     # Vertex AI Gemini 3 models require VERTEXAI_LOCATION="global"
     if model.startswith("vertex_ai/gemini-3") and not os.environ.get(
