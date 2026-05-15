@@ -4,35 +4,44 @@
     "domains": {
       "airline": {
         "tasks": 50,
-        "avg_reward": 0.6321,
+        "avg_reward": 0.5933,
         "pass_at": {
-          "1": 0.5
+          "1": 0.54
         },
         "pass_hat": {
-          "1": 0.5
+          "1": 0.54
         }
       },
       "retail": {
-        "tasks": 41,
-        "avg_reward": 0.439,
+        "tasks": 114,
+        "avg_reward": 0.3333,
         "pass_at": {
-          "1": 0.1579
+          "1": 0.3158
         },
         "pass_hat": {
-          "1": 0.1579
+          "1": 0.3158
         }
       },
-      "telecom": null
+      "telecom": {
+        "tasks": 114,
+        "avg_reward": 0.9585,
+        "pass_at": {
+          "1": 0.9561
+        },
+        "pass_hat": {
+          "1": 0.9561
+        }
+      }
     },
     "aggregate": {
-      "tasks": 91,
-      "domains_completed": 2,
-      "avg_reward": 0.5451,
+      "tasks": 278,
+      "domains_completed": 3,
+      "avg_reward": 0.6365,
       "pass_at": {
-        "1": 0.3459
+        "1": 0.6187
       },
       "pass_hat": {
-        "1": 0.3459
+        "1": 0.6187
       }
     }
   },
@@ -215,35 +224,48 @@
     "model": "qwen36_27b_cand1",
     "domains": {
       "airline": {
-        "tasks": 12,
-        "avg_reward": 0.5833,
+        "tasks": 50,
+        "avg_reward": 0.48,
         "pass_at": {
-          "1": 0.5833,
-          "2": 0.0,
+          "1": 0.66,
+          "2": 0.5,
+          "3": 0.28
+        },
+        "pass_hat": {
+          "1": 0.48,
+          "2": 0.5,
+          "3": 0.28
+        }
+      },
+      "retail": {
+        "tasks": 114,
+        "avg_reward": 0.2821,
+        "pass_at": {
+          "1": 0.3246,
+          "2": 0.0614,
           "3": 0.0
         },
         "pass_hat": {
-          "1": 0.5833,
-          "2": 0.0,
+          "1": 0.2821,
+          "2": 0.0614,
           "3": 0.0
         }
       },
-      "retail": null,
       "telecom": null
     },
     "aggregate": {
-      "tasks": 12,
-      "domains_completed": 1,
-      "avg_reward": 0.5833,
+      "tasks": 164,
+      "domains_completed": 2,
+      "avg_reward": 0.3424,
       "pass_at": {
-        "1": 0.5833,
-        "2": 0.0,
-        "3": 0.0
+        "1": 0.4268,
+        "2": 0.1951,
+        "3": 0.0854
       },
       "pass_hat": {
-        "1": 0.5833,
-        "2": 0.0,
-        "3": 0.0
+        "1": 0.3424,
+        "2": 0.1951,
+        "3": 0.0854
       }
     }
   },
@@ -251,15 +273,51 @@
     "model": "qwen36_27b_cand2",
     "domains": {
       "airline": {
-        "tasks": 6,
-        "avg_reward": 0.8333,
+        "tasks": 50,
+        "avg_reward": 0.4207,
         "pass_at": {
-          "1": 0.8333,
+          "1": 0.7,
+          "2": 0.38,
+          "3": 0.14
+        },
+        "pass_hat": {
+          "1": 0.4207,
+          "2": 0.38,
+          "3": 0.14
+        }
+      },
+      "retail": null,
+      "telecom": null
+    },
+    "aggregate": {
+      "tasks": 50,
+      "domains_completed": 1,
+      "avg_reward": 0.4207,
+      "pass_at": {
+        "1": 0.7,
+        "2": 0.38,
+        "3": 0.14
+      },
+      "pass_hat": {
+        "1": 0.4207,
+        "2": 0.38,
+        "3": 0.14
+      }
+    }
+  },
+  {
+    "model": "qwen36_27b_cand3",
+    "domains": {
+      "airline": {
+        "tasks": 6,
+        "avg_reward": 0.6667,
+        "pass_at": {
+          "1": 0.6667,
           "2": 0.0,
           "3": 0.0
         },
         "pass_hat": {
-          "1": 0.8333,
+          "1": 0.6667,
           "2": 0.0,
           "3": 0.0
         }
@@ -270,14 +328,14 @@
     "aggregate": {
       "tasks": 6,
       "domains_completed": 1,
-      "avg_reward": 0.8333,
+      "avg_reward": 0.6667,
       "pass_at": {
-        "1": 0.8333,
+        "1": 0.6667,
         "2": 0.0,
         "3": 0.0
       },
       "pass_hat": {
-        "1": 0.8333,
+        "1": 0.6667,
         "2": 0.0,
         "3": 0.0
       }
