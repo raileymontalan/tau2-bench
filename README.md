@@ -100,40 +100,40 @@ Use `tau2 view` (after `source .venv/bin/activate`) to browse simulations intera
 
 ### AISG evaluation results
 
-Models ordered alphabetically. Current data is 1-trial runs (3-trial re-runs in progress for cand models).
+Models ordered alphabetically. Current data is 1-trial runs; cand models have 3-trial data available.
 
 | Model | Domain | Tasks | Avg | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
 |-------|--------|------:|----:|-------:|-------:|-------:|-------:|
-| aisingapore/qwen36_27b_cand1 | airline | 12† | 0.583 | 0.583 | 0.583 | — | — |
+| aisingapore/qwen36_27b_cand1 | airline | 12 | 0.583 | 0.583 | 0.583 | 0.000 | 0.000 |
 | | retail | — | — | — | — | — | — |
 | | telecom | — | — | — | — | — | — |
-| | **TOTAL** | **12** | **0.583** | **0.583** | **0.583** | — | — |
-| aisingapore/qwen36_27b_cand2 | airline | 6† | 0.833 | 0.833 | 0.833 | — | — |
+| | **TOTAL** | **12** | **0.583** | **0.583** | **0.583** | **0.000** | **0.000** |
+| aisingapore/qwen36_27b_cand2 | airline | 6 | 0.833 | 0.833 | 0.833 | 0.000 | 0.000 |
 | | retail | — | — | — | — | — | — |
 | | telecom | — | — | — | — | — | — |
-| | **TOTAL** | **6** | **0.833** | **0.833** | **0.833** | — | — |
+| | **TOTAL** | **6** | **0.833** | **0.833** | **0.833** | **0.000** | **0.000** |
 | google/gemma-4-31B-it | airline | 50 | 0.627 | 0.640 | 0.640 | — | — |
 | | retail | 114 | 0.690 | 0.658 | 0.658 | — | — |
 | | telecom | 114 | 0.328 | 0.333 | 0.333 | — | — |
 | | **TOTAL** | **278** | **0.530** | **0.522** | **0.522** | — | — |
 | google/gemma-4-E2B-it | airline | 48\* | 0.261 | 0.260 | 0.260 | — | — |
 | | retail | 114 | 0.105 | 0.097 | 0.097 | — | — |
-| | telecom | 79\* | 0.141 | 0.070 | 0.070 | — | — |
-| | **TOTAL** | **241** | **0.148** | **0.120** | **0.120** | — | — |
+| | telecom | 80\* | 0.154 | 0.070 | 0.070 | — | — |
+| | **TOTAL** | **242** | **0.152** | **0.120** | **0.120** | — | — |
 | google/gemma-4-E4B-it | airline | 49\* | 0.404 | 0.400 | 0.400 | — | — |
 | | retail | 113\* | 0.107 | 0.114 | 0.114 | — | — |
 | | telecom | 108\* | 0.173 | 0.158 | 0.158 | — | — |
 | | **TOTAL** | **270** | **0.187** | **0.184** | **0.184** | — | — |
-| Qwen/Qwen3.5-27B | airline | 50 | 0.625 | 0.500 | 0.500 | — | — |
+| Qwen/Qwen3.5-27B | airline | 50 | 0.632 | 0.500 | 0.500 | — | — |
 | | retail | 41\* | 0.439 | 0.158 | 0.158 | — | — |
 | | telecom | — | — | — | — | — | — |
-| | **TOTAL** | **91** | **0.541** | **0.346** | **0.346** | — | — |
+| | **TOTAL** | **91** | **0.545** | **0.346** | **0.346** | — | — |
 | Qwen/Qwen3.6-27B | airline | 50 | 0.602 | 0.580 | 0.580 | — | — |
 | | retail | 94\* | 0.479 | 0.395 | 0.395 | — | — |
 | | telecom | — | — | — | — | — | — |
 | | **TOTAL** | **144** | **0.521** | **0.459** | **0.459** | — | — |
 
-\* = run incomplete (fewer tasks than domain total). † = evaluation in progress. "—" = run did not complete.
+\* = run incomplete (fewer tasks than domain total). "—" = run did not complete.
 
 Re-run incomplete domains: `./submit_tau2bench.sh <model>` (uses `--auto-resume`).
 
