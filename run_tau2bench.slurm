@@ -139,6 +139,7 @@ thinking = mcfg.get("enable_thinking", True)
 print(f'_MODEL_THINKING={"true" if thinking else "false"}')
 print(f'_TOOL_CALL_PARSER={shlex.quote(str(mcfg.get("tool_call_parser", "")))}')
 print(f'_REASONING_PARSER={shlex.quote(str(mcfg.get("reasoning_parser", "")))}')
+print(f'_MODEL_PATH={shlex.quote(str(mcfg.get("model_path", model)))}')
 PYEOF
 ) || exit 1
 eval "$_model_vars"
@@ -148,6 +149,8 @@ MODEL_PORT=${MODEL_PORT:-$(free_port)}
 ENABLE_THINKING=${ENABLE_THINKING:-${_MODEL_THINKING:-"true"}}
 TOOL_CALL_PARSER=${TOOL_CALL_PARSER:-${_TOOL_CALL_PARSER:-""}}
 REASONING_PARSER=${REASONING_PARSER:-${_REASONING_PARSER:-""}}
+MODEL_PATH=${MODEL_PATH:-${_MODEL_PATH:-"${MODEL}"}}
+MODEL_BASENAME="$(echo "${MODEL}" | awk -F/ '{print $NF}')"
 
 # Load judge and eval defaults from config
 eval "$(python3 - <<'PYEOF'
@@ -177,7 +180,6 @@ MAX_CONCURRENCY=${MAX_CONCURRENCY:-${_MAX_CONCURRENCY:-"3"}}
 MAX_STEPS=${MAX_STEPS:-${_MAX_STEPS:-"200"}}
 SEED=${SEED:-${_SEED:-"300"}}
 TASK_TIMEOUT=${TASK_TIMEOUT:-${_TASK_TIMEOUT:-"300"}}
-MODEL_BASENAME="$(echo "${MODEL}" | awk -F/ '{print $NF}')"
 OUTPUT=${OUTPUT:-"${MODEL_BASENAME}"}
 
 # Resolve DOMAIN=all to core text domains
@@ -234,7 +236,7 @@ fi
 
 # Start agent model vLLM server
 echo "Starting agent vLLM server: ${MODEL} on port ${MODEL_PORT} (TP=${MODEL_TP})..."
-CUDA_VISIBLE_DEVICES=${MODEL_GPUS} .venv/bin/vllm serve "${MODEL}" \
+CUDA_VISIBLE_DEVICES=${MODEL_GPUS} .venv/bin/vllm serve "${MODEL_PATH}" \
     --port "${MODEL_PORT}" \
     --tensor-parallel-size "${MODEL_TP}" \
     --served-model-name "$(echo "${MODEL}" | awk -F/ '{print $NF}')" \
