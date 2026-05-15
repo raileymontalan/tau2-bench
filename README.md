@@ -104,18 +104,22 @@ Models ordered alphabetically. Gemma and base Qwen models are 1-trial runs (Pass
 
 | Model | Domain | Tasks | Avg | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
 |-------|--------|------:|----:|-------:|-------:|-------:|-------:|
+| aisingapore/qwen36_27b_arcee *(partial)* | airline | 50\* | 0.571 | 0.680 | 0.571 | — | — |
+| | retail | — | — | — | — | — | — |
+| | telecom | — | — | — | — | — | — |
+| | **TOTAL** | **50\*** | **0.571** | **0.680** | **0.571** | — | — |
 | aisingapore/qwen36_27b_cand1 | airline | 50 | 0.480 | 0.660 | 0.480 | 0.500 | 0.280 |
-| | retail | 114 | 0.282 | 0.325 | 0.282 | 0.061 | 0.000 |
+| | retail | 114 | 0.303 | 0.386 | 0.303 | 0.149 | 0.000 |
 | | telecom | — | — | — | — | — | — |
-| | **TOTAL** | **164** | **0.342** | **0.427** | **0.342** | **0.195** | **0.085** |
-| aisingapore/qwen36_27b_cand2 | airline | 50 | 0.421 | 0.700 | 0.421 | 0.380 | 0.140 |
+| | **TOTAL** | **164** | **0.357** | **0.470** | **0.357** | **0.256** | **0.085** |
+| aisingapore/qwen36_27b_cand2 | airline | 50 | 0.430 | 0.700 | 0.430 | 0.400 | 0.180 |
 | | retail | — | — | — | — | — | — |
 | | telecom | — | — | — | — | — | — |
-| | **TOTAL** | **50** | **0.421** | **0.700** | **0.421** | **0.380** | **0.140** |
-| aisingapore/qwen36_27b_cand3 *(partial)* | airline | 6 | 0.667 | 0.667 | 0.667 | 0.000 | 0.000 |
+| | **TOTAL** | **50** | **0.430** | **0.700** | **0.430** | **0.400** | **0.180** |
+| aisingapore/qwen36_27b_cand3 *(partial)* | airline | 19\* | 0.474 | 0.474 | 0.474 | 0.000 | 0.000 |
 | | retail | — | — | — | — | — | — |
 | | telecom | — | — | — | — | — | — |
-| | **TOTAL** | **6** | **0.667** | **0.667** | **0.667** | **0.000** | **0.000** |
+| | **TOTAL** | **19\*** | **0.474** | **0.474** | **0.474** | **0.000** | **0.000** |
 | google/gemma-4-31B-it | airline | 50 | 0.627 | 0.640 | 0.640 | — | — |
 | | retail | 114 | 0.690 | 0.658 | 0.658 | — | — |
 | | telecom | 114 | 0.328 | 0.333 | 0.333 | — | — |
@@ -125,24 +129,43 @@ Models ordered alphabetically. Gemma and base Qwen models are 1-trial runs (Pass
 | | telecom | 80\* | 0.154 | 0.070 | 0.070 | — | — |
 | | **TOTAL** | **242** | **0.152** | **0.120** | **0.120** | — | — |
 | google/gemma-4-E4B-it | airline | 49\* | 0.404 | 0.400 | 0.400 | — | — |
-| | retail | 113\* | 0.107 | 0.114 | 0.114 | — | — |
+| | retail | 113\* | 0.106 | 0.114 | 0.114 | — | — |
 | | telecom | 108\* | 0.173 | 0.158 | 0.158 | — | — |
 | | **TOTAL** | **270** | **0.187** | **0.184** | **0.184** | — | — |
 | Qwen/Qwen3.5-27B | airline | 50 | 0.593 | 0.540 | 0.540 | — | — |
 | | retail | 114 | 0.333 | 0.316 | 0.316 | — | — |
-| | telecom | 114 | 0.959 | 0.956 | 0.956 | — | — |
-| | **TOTAL** | **278** | **0.637** | **0.619** | **0.619** | — | — |
+| | telecom | 114 | 0.962 | 0.965 | 0.965 | — | — |
+| | **TOTAL** | **278** | **0.638** | **0.622** | **0.622** | — | — |
 | Qwen/Qwen3.6-27B | airline | 50 | 0.602 | 0.580 | 0.580 | — | — |
 | | retail | 94\* | 0.479 | 0.395 | 0.395 | — | — |
 | | telecom | — | — | — | — | — | — |
 | | **TOTAL** | **144** | **0.521** | **0.459** | **0.459** | — | — |
 
-\* = run incomplete (fewer tasks than domain total). "—" = run did not complete. *(partial)* = very few tasks completed.
+\* = run incomplete (fewer tasks than domain total, or fewer than 3 trials). "—" = run did not complete. *(partial)* = very few tasks/trials completed.
+
+`aisingapore/qwen36_27b_arcee` is a short alias for `qwen36_27b_tlmsmytathvi_sparse_reversekl_otr_response_sys_397b_teacher_w_sys_4000_arcee`. Pass^2/^3 not shown because trial counts are uneven across tasks.
 
 Re-run incomplete domains: `./submit_tau2bench.sh <model>` (uses `--auto-resume`).
 
 > **Known issue — gemma-4-E2B-it / E4B-it telecom infrastructure errors:**
 > Both Gemma E-series models produce empty assistant messages (no `content`, no `tool_calls`) when given telecom tool schemas, causing every retry to fail and simulations to be classified as `INFRASTRUCTURE_ERROR`. This is a model capability limitation — the small models cannot handle the telecom schema complexity. Re-runs will not improve these numbers; telecom Pass^2/^3 will remain `—` for these models.
+
+### Thinking-off (nothink) variants
+
+Runs with `enable_thinking: false` (`--default-chat-template-kwargs '{"enable_thinking": false}'`). 3 trials each. Blank TOTAL = telecom not yet run.
+
+| Model | Domain | Tasks | Avg | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
+|-------|--------|------:|----:|-------:|-------:|-------:|-------:|
+| google/gemma-4-31B-it_nothink | airline | 50 | 0.667 | 0.760 | 0.667 | 0.660 | 0.580 |
+| | retail | 54\* | 0.667 | 0.667 | 0.667 | — | — |
+| | telecom | — | — | — | — | — | — |
+| | **TOTAL** | — | — | — | — | — | — |
+| google/gemma-4-E2B-it_nothink | airline | 48\* | 0.218 | 0.292 | 0.218 | 0.250 | 0.125 |
+| | retail | 114 | 0.111 | 0.149 | 0.111 | 0.105 | 0.079 |
+| | telecom | 38\*† | 0.226 | 0.211 | 0.226 | — | — |
+| | **TOTAL** | — | — | — | — | — | — |
+
+† = high infrastructure failure rate (132/194 sims have no reward — same empty-message issue as the thinking version).
 
 Metric definitions:
 - **Avg** — mean reward across all simulations (0–1)
