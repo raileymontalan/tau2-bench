@@ -100,59 +100,58 @@ Use `tau2 view` (after `source .venv/bin/activate`) to browse simulations intera
 
 ### AISG evaluation results
 
-Base models (Gemma, Qwen3.5-27B, Qwen3.6-27B) ran with 1 trial — Pass^2/^3 not shown. Candidate models used 3 trials; †-marked domains had only 1 trial completed (pass^2/^3 not available for that domain; TOTAL pass^2/^3 is conservative accordingly).
+All models run with 3 trials. \* marks incomplete task counts (infrastructure errors — Gemma E-series only).
 
 | Model | Domain | Tasks | Avg | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
 |-------|--------|------:|----:|-------:|-------:|-------:|-------:|
 | aisingapore/qwen36_27b_arcee | airline | 50 | 0.553 | 0.720 | 0.553 | 0.560 | 0.380 |
-| | retail | 114 | 0.362 | 0.544 | 0.360 | 0.351 | 0.184 |
-| | telecom | 94\*† | 0.660 | 0.660 | 0.660 | — | — |
-| | **TOTAL** | **258\*** | **0.507** | **0.620** | **0.507** | **0.264** | **0.155** |
+| | retail | 114 | 0.361 | 0.544 | 0.360 | 0.351 | 0.184 |
+| | telecom | 114 | 0.573 | 0.842 | 0.573 | 0.588 | 0.289 |
+| | **TOTAL** | **278** | **0.482** | **0.698** | **0.482** | **0.486** | **0.263** |
 | aisingapore/qwen36_27b_cand1 | airline | 50 | 0.480 | 0.660 | 0.480 | 0.500 | 0.280 |
 | | retail | 114 | 0.310 | 0.526 | 0.310 | 0.272 | 0.132 |
-| | telecom | 84\*† | 0.667 | 0.659 | 0.659 | — | — |
-| | **TOTAL** | **248\*** | **0.465** | **0.598** | **0.462** | **0.226** | **0.117** |
+| | telecom | 114 | 0.534 | 0.772 | 0.532 | 0.535 | 0.289 |
+| | **TOTAL** | **278** | **0.432** | **0.651** | **0.432** | **0.421** | **0.223** |
 | aisingapore/qwen36_27b_cand2 | airline | 50 | 0.430 | 0.700 | 0.427 | 0.400 | 0.180 |
-| | retail | 114 | 0.221 | 0.342 | 0.220 | 0.088 | 0.000 |
-| | telecom | — | — | — | — | — | — |
-| | **TOTAL** | **164** | **0.284** | **0.451** | **0.283** | **0.183** | **0.055** |
+| | retail | 114 | 0.249 | 0.465 | 0.249 | 0.211 | 0.070 |
+| | telecom | 114 | 0.941 | 1.000 | 0.939 | 0.965 | 0.851 |
+| | **TOTAL** | **278** | **0.565** | **0.727** | **0.564** | **0.554** | **0.410** |
 | aisingapore/qwen36_27b_cand3 | airline | 50 | 0.413 | 0.660 | 0.413 | 0.400 | 0.180 |
-| | retail | 114 | 0.392 | 0.579 | 0.392 | 0.167 | 0.000 |
-| | telecom | — | — | — | — | — | — |
-| | **TOTAL** | **164** | **0.398** | **0.604** | **0.398** | **0.238** | **0.055** |
-| google/gemma-4-31B-it | airline | 50 | 0.627 | 0.640 | 0.640 | — | — |
-| | retail | 114 | 0.690 | 0.658 | 0.658 | — | — |
-| | telecom | 114 | 0.328 | 0.333 | 0.333 | — | — |
-| | **TOTAL** | **278** | **0.530** | **0.522** | **0.522** | — | — |
-| google/gemma-4-E2B-it | airline | 48\* | 0.261 | 0.260 | 0.260 | — | — |
-| | retail | 114 | 0.105 | 0.097 | 0.097 | — | — |
-| | telecom | 80\* | 0.157 | 0.053 | 0.053 | — | — |
-| | **TOTAL** | **242** | **0.153** | **0.114** | **0.114** | — | — |
-| google/gemma-4-E4B-it | airline | 49\* | 0.404 | 0.400 | 0.400 | — | — |
-| | retail | 113\* | 0.106 | 0.114 | 0.114 | — | — |
-| | telecom | 109\* | 0.170 | 0.149 | 0.149 | — | — |
-| | **TOTAL** | **271** | **0.186** | **0.180** | **0.180** | — | — |
-| Qwen/Qwen3.5-27B | airline | 50 | 0.593 | 0.540 | 0.540 | — | — |
-| | retail | 114 | 0.333 | 0.316 | 0.316 | — | — |
-| | telecom | 114 | 0.962 | 0.965 | 0.965 | — | — |
-| | **TOTAL** | **278** | **0.638** | **0.622** | **0.622** | — | — |
-| Qwen/Qwen3.6-27B | airline | 50 | 0.584 | 0.560 | 0.560 | — | — |
-| | retail | 114 | 0.365 | 0.368 | 0.368 | — | — |
-| | telecom | 114 | 0.895 | 0.895 | 0.895 | — | — |
-| | **TOTAL** | **278** | **0.622** | **0.619** | **0.619** | — | — |
+| | retail | 114 | 0.374 | 0.693 | 0.374 | 0.316 | 0.114 |
+| | telecom | 114 | 0.915 | 1.000 | 0.915 | 0.956 | 0.789 |
+| | **TOTAL** | **278** | **0.603** | **0.813** | **0.603** | **0.594** | **0.403** |
+| aisingapore/qwen36_27b_cand5 | airline | 50 | 0.473 | 0.700 | 0.473 | 0.500 | 0.220 |
+| | retail | 114 | 0.316 | 0.553 | 0.316 | 0.307 | 0.088 |
+| | telecom | 114 | 0.886 | 0.982 | 0.886 | 0.947 | 0.728 |
+| | **TOTAL** | **278** | **0.578** | **0.755** | **0.578** | **0.604** | **0.374** |
+| google/gemma-4-31B-it | airline | 50 | 0.627 | 0.720 | 0.627 | 0.640 | 0.520 |
+| | retail | 114 | 0.690 | 0.798 | 0.690 | 0.684 | 0.588 |
+| | telecom | 114 | 0.327 | 0.421 | 0.327 | 0.316 | 0.246 |
+| | **TOTAL** | **278** | **0.530** | **0.629** | **0.530** | **0.525** | **0.435** |
+| google/gemma-4-E2B-it | airline | 49\* | 0.271 | 0.320 | 0.260 | 0.260 | 0.200 |
+| | retail | 114 | 0.105 | 0.123 | 0.105 | 0.105 | 0.088 |
+| | telecom | 96\* | 0.151 | 0.149 | 0.111 | 0.105 | 0.079 |
+| | **TOTAL** | **259\*** | **0.154** | **0.170** | **0.137** | **0.135** | **0.106** |
+| google/gemma-4-E4B-it | airline | 49\* | 0.404 | 0.480 | 0.393 | 0.360 | 0.340 |
+| | retail | 113\* | 0.107 | 0.175 | 0.105 | 0.079 | 0.061 |
+| | telecom | 109\* | 0.171 | 0.184 | 0.161 | 0.167 | 0.132 |
+| | **TOTAL** | **271\*** | **0.186** | **0.234** | **0.180** | **0.165** | **0.140** |
+| Qwen/Qwen3.5-27B | airline | 50 | 0.593 | 0.780 | 0.593 | 0.580 | 0.420 |
+| | retail | 114 | 0.333 | 0.614 | 0.333 | 0.289 | 0.096 |
+| | telecom | 114 | 0.962 | 1.000 | 0.962 | 0.991 | 0.895 |
+| | **TOTAL** | **278** | **0.638** | **0.802** | **0.638** | **0.629** | **0.482** |
+| Qwen/Qwen3.6-27B | airline | 50 | 0.584 | 0.760 | 0.584 | 0.620 | 0.360 |
+| | retail | 114 | 0.364 | 0.596 | 0.363 | 0.333 | 0.158 |
+| | telecom | 114 | 0.895 | 0.965 | 0.895 | 0.912 | 0.807 |
+| | **TOTAL** | **278** | **0.621** | **0.777** | **0.621** | **0.622** | **0.460** |
 
-\* = run incomplete. "—" = domain not run. † = only 1 trial completed for this domain; pass^2/^3 not applicable.
+\* = incomplete (fewer tasks than domain total — infrastructure errors, not retriable).
 
 `aisingapore/qwen36_27b_arcee` is a short alias for `qwen36_27b_tlmsmytathvi_sparse_reversekl_otr_response_sys_397b_teacher_w_sys_4000_arcee`.
 
-Re-run incomplete domains: `./submit_tau2bench.sh <model>` (uses `--auto-resume`).
-
-> **Known issue — gemma-4-E2B-it / E4B-it telecom infrastructure errors:**
-> Both Gemma E-series models produce empty assistant messages (no `content`, no `tool_calls`) on some telecom tasks, causing simulation failures. This is a model capability limitation. Re-runs will not improve these numbers significantly.
-
 ### Thinking-off (nothink) variants
 
-Runs with `enable_thinking: false` (`--default-chat-template-kwargs '{"enable_thinking": false}'`). 3 trials each. All models have full 3-domain coverage; \* marks incomplete task counts within a domain.
+Runs with `enable_thinking: false` (`--default-chat-template-kwargs '{"enable_thinking": false}'`). 3 trials each. \* marks incomplete task counts.
 
 | Model | Domain | Tasks | Avg | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
 |-------|--------|------:|----:|-------:|-------:|-------:|-------:|
@@ -172,13 +171,17 @@ Runs with `enable_thinking: false` (`--default-chat-template-kwargs '{"enable_th
 | | retail | 114 | 0.818 | 0.895 | 0.816 | 0.825 | 0.728 |
 | | telecom | 114 | 0.860 | 0.956 | 0.860 | 0.886 | 0.737 |
 | | **TOTAL** | **278** | **0.825** | **0.917** | **0.824** | **0.838** | **0.716** |
+| aisingapore/qwen36_27b_cand5_nothink | airline | 50 | 0.720 | 0.840 | 0.720 | 0.720 | 0.600 |
+| | retail | 114 | 0.743 | 0.860 | 0.743 | 0.763 | 0.605 |
+| | telecom | 114 | 0.930 | 0.991 | 0.930 | 0.930 | 0.868 |
+| | **TOTAL** | **278** | **0.815** | **0.910** | **0.815** | **0.824** | **0.712** |
 | google/gemma-4-31B-it_nothink | airline | 50 | 0.667 | 0.760 | 0.667 | 0.660 | 0.580 |
 | | retail | 114 | 0.643 | 0.754 | 0.643 | 0.667 | 0.509 |
-| | telecom | 114 | 0.350 | 0.483 | 0.348 | 0.307 | 0.254 |
+| | telecom | 114 | 0.350 | 0.482 | 0.348 | 0.307 | 0.254 |
 | | **TOTAL** | **278** | **0.527** | **0.644** | **0.526** | **0.518** | **0.417** |
 | google/gemma-4-E2B-it_nothink | airline | 48\* | 0.218 | 0.280 | 0.207 | 0.240 | 0.100 |
 | | retail | 114 | 0.111 | 0.149 | 0.111 | 0.105 | 0.079 |
-| | telecom | 45\*† | 0.216 | 0.079 | 0.064 | 0.061 | 0.053 |
+| | telecom | 45\* | 0.216 | 0.079 | 0.064 | 0.061 | 0.053 |
 | | **TOTAL** | **207\*** | **0.159** | **0.164** | **0.123** | **0.127** | **0.078** |
 | google/gemma-4-E4B-it_nothink | airline | 48\* | 0.387 | 0.440 | 0.367 | 0.340 | 0.320 |
 | | retail | 112\* | 0.099 | 0.149 | 0.097 | 0.079 | 0.061 |
@@ -191,9 +194,7 @@ Runs with `enable_thinking: false` (`--default-chat-template-kwargs '{"enable_th
 | Qwen/Qwen3.6-27B_nothink | airline | 50 | 0.727 | 0.840 | 0.727 | 0.760 | 0.580 |
 | | retail | 114 | 0.789 | 0.851 | 0.789 | 0.789 | 0.728 |
 | | telecom | 114 | 0.816 | 0.930 | 0.816 | 0.833 | 0.684 |
-| | **TOTAL** | **278** | **0.789** | **0.881** | **0.789** | **0.802** | **0.684** |
-
-† = high infrastructure failure rate (empty-message issue, same as thinking variant).
+| | **TOTAL** | **278** | **0.789** | **0.881** | **0.789** | **0.802** | **0.683** |
 
 Metric definitions:
 - **Avg** — mean reward across all simulations (0–1)
@@ -205,13 +206,13 @@ Metric definitions:
 To re-score manually:
 
 ```bash
-python score_summary.py data/simulations/
+srun --gres=gpu:0 --mem=8G .venv/bin/python score_summary.py data/simulations/
 ```
 
 Or for a single domain dir:
 
 ```bash
-python score_summary.py data/simulations/Qwen3.6-27B_airline
+srun --gres=gpu:0 --mem=8G .venv/bin/python score_summary.py data/simulations/Qwen3.6-27B_airline
 ```
 
 ## Reference

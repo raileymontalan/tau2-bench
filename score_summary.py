@@ -44,6 +44,10 @@ def _pass_metrics_from_json(results_file: Path) -> dict | None:
         reward = r.get("reward", 0.0) if isinstance(r, dict) else 0.0
         task_sim_map[s["task_id"]].append(float(reward or 0.0))
 
+    # info.num_trials can be stale after --auto-resume adds trials without updating metadata
+    if task_sim_map:
+        num_trials = max(num_trials, max(len(v) for v in task_sim_map.values()))
+
     n_tasks = len(task_sim_map)
     if n_tasks == 0:
         return None
