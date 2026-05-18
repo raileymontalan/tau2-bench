@@ -50,7 +50,7 @@
 #
 # NUM_TRIALS
 #   Evaluation trials per task. Higher = more robust pass@k estimate.
-#   Default: 1
+#   Default: 3
 #
 # NUM_TASKS
 #   Cap tasks per domain. Omit (leave empty) to run the full domain.
@@ -87,7 +87,7 @@
 #SBATCH --mem=256G
 #SBATCH --gres=gpu:2
 #SBATCH --time=48:00:00
-#SBATCH --nodelist=smc-pod-[14,12,11,10,8,5,3]
+#SBATCH --nodelist=smc-pod-[10,9,8,5,3]
 #SBATCH --output=logs/tau2bench-%j.out
 #SBATCH --error=logs/tau2bench-%j.out
 
@@ -160,7 +160,7 @@ ecfg = cfg.get('eval', {})
 print(f'_JUDGE_MODEL={shlex.quote(str(ecfg.get("judge_model", "openai/gpt-oss-120b")))}')
 print(f'_JUDGE_TP={shlex.quote(str(ecfg.get("judge_tp", 1)))}')
 v = ecfg.get("domain", "all"); print(f'_DOMAIN={shlex.quote(str(v))}')
-v = ecfg.get("num_trials", 1); print(f'_NUM_TRIALS={shlex.quote(str(v))}')
+v = ecfg.get("num_trials", 3); print(f'_NUM_TRIALS={shlex.quote(str(v))}')
 v = ecfg.get("num_tasks", ""); v = "" if v is None else v; print(f'_NUM_TASKS={shlex.quote(str(v))}')
 v = ecfg.get("max_concurrency", 3); print(f'_MAX_CONCURRENCY={shlex.quote(str(v))}')
 v = ecfg.get("max_steps", 200); print(f'_MAX_STEPS={shlex.quote(str(v))}')
@@ -174,7 +174,7 @@ JUDGE_TP=${JUDGE_TP:-${_JUDGE_TP:-"1"}}
 JUDGE_PORT=${JUDGE_PORT:-$(free_port)}
 
 DOMAIN=${DOMAIN:-${_DOMAIN:-"all"}}
-NUM_TRIALS=${NUM_TRIALS:-${_NUM_TRIALS:-"1"}}
+NUM_TRIALS=${NUM_TRIALS:-${_NUM_TRIALS:-"3"}}
 NUM_TASKS=${NUM_TASKS:-${_NUM_TASKS:-""}}
 MAX_CONCURRENCY=${MAX_CONCURRENCY:-${_MAX_CONCURRENCY:-"3"}}
 MAX_STEPS=${MAX_STEPS:-${_MAX_STEPS:-"200"}}
